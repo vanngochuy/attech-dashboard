@@ -114,7 +114,7 @@ export default function ChatPage() {
           />
           <button
             type="submit"
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || !(input ?? '').trim()}
             className="absolute right-2 w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
           >
             <Send size={18} className="ml-1" />
