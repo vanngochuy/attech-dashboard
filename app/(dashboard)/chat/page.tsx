@@ -1,6 +1,6 @@
 'use client';
 
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react';
 import { Bot, Send, User, FileText, Loader2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { DocumentPreviewModal } from '@/components/document-preview-modal';

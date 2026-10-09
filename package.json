@@ -9,11 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/google": "^4.0.90",
-    "@ai-sdk/react": "^0.0.70",
+    "@ai-sdk/google": "^4.0.93",
+    "@ai-sdk/react": "^4.0.93",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.6",
-    "ai": "^3.4.36",
+    "ai": "^4.1.50",
     "clsx": "^2.1.1",
     "lucide-react": "^0.453.0",
     "next": "14.2.15",
