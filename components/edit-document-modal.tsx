@@ -13,9 +13,10 @@ import {
   Calendar,
   Cloud,
   FileText,
-  SlidersHorizontal,
   ChevronDown,
-  Check
+  Check,
+  Building,
+  Hash
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -25,12 +26,13 @@ const supabase = createClient(
 );
 
 const SCOPE_OPTIONS = [
-  { value: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật', dot: 'bg-indigo-400', desc: 'CNS, Selex, DVOR/DME, Radar' },
+  { value: 'VB_PHAP_LUAT', label: 'Văn bản Pháp luật & Quy chế', dot: 'bg-blue-400', desc: 'Luật, Nghị định, Thông tư, Quy chế chung' },
+  { value: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật', dot: 'bg-indigo-400', desc: 'CNS, Selex, DVOR/DME, Radar, HDCV, TUH' },
   { value: 'SMS', label: 'An toàn (SMS)', dot: 'bg-emerald-400', desc: 'Hệ thống an toàn, Báo cáo sự cố' },
   { value: 'PCCC_CHCN', label: 'PCCC & CHCN', dot: 'bg-rose-400', desc: 'Phòng cháy chữa cháy & Cứu nạn' },
   { value: 'PCTT_TKCN', label: 'PCTT & TKCN', dot: 'bg-cyan-400', desc: 'Phòng chống thiên tai & TKCN' },
   { value: 'ATVSLD', label: 'An toàn VSLĐ', dot: 'bg-amber-400', desc: 'Bảo hộ, An toàn điện, Làm việc trên cao' },
-  { value: 'CONG_TRINH_HK', label: 'Công trình Hàng không', dot: 'bg-purple-400', desc: 'Hạ tầng đài trạm, Nhà trạm, Anten' },
+  { value: 'CONG_TRINH_HK', label: 'Công trình Hàng không', dot: 'bg-purple-400', desc: 'Hạ tầng đài trạm, Nhà trạm, Anten, ANHK' },
 ];
 
 interface EditDocumentModalProps {
@@ -39,6 +41,8 @@ interface EditDocumentModalProps {
   document: {
     id: string;
     file_name: string;
+    document_code?: string;
+    issuing_authority?: string;
     drive_file_id: string;
     drive_view_url: string;
     department_access?: string[];
@@ -50,7 +54,9 @@ interface EditDocumentModalProps {
 
 export default function EditDocumentModal({ isOpen, onClose, document, onSuccess }: EditDocumentModalProps) {
   const [fileName, setFileName] = useState('');
-  const [scopeDomain, setScopeDomain] = useState('QL_KY_THUAT');
+  const [documentCode, setDocumentCode] = useState('');
+  const [issuingAuthority, setIssuingAuthority] = useState('');
+  const [scopeDomain, setScopeDomain] = useState('VB_PHAP_LUAT');
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -60,7 +66,9 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
   useEffect(() => {
     if (document) {
       setFileName(document.file_name || '');
-      setScopeDomain(document.department_access?.[0] || 'QL_KY_THUAT');
+      setDocumentCode(document.document_code || '');
+      setIssuingAuthority(document.issuing_authority || '');
+      setScopeDomain(document.department_access?.[0] || 'VB_PHAP_LUAT');
       setError(null);
       setConfirmDelete(false);
       setSaveSuccess(false);
@@ -82,16 +90,37 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
     setError(null);
 
     try {
+      const updatePayload: any = {
+        file_name: fileName.trim(),
+        department_access: [scopeDomain],
+        updated_at: new Date().toISOString()
+      };
+
+      // Chỉ thêm document_code và issuing_authority nếu có giá trị
+      if (documentCode !== undefined) updatePayload.document_code = documentCode.trim();
+      if (issuingAuthority !== undefined) updatePayload.issuing_authority = issuingAuthority.trim();
+
       const { error: updateError } = await supabase
         .from('document_files')
-        .update({
-          file_name: fileName.trim(),
-          department_access: [scopeDomain],
-          updated_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', document.id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        // Nếu database chưa có cột document_code / issuing_authority, thử update trường cơ bản
+        if (updateError.message.includes('column') && updateError.message.includes('does not exist')) {
+          const { error: fallbackError } = await supabase
+            .from('document_files')
+            .update({
+              file_name: fileName.trim(),
+              department_access: [scopeDomain],
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', document.id);
+          if (fallbackError) throw fallbackError;
+        } else {
+          throw updateError;
+        }
+      }
 
       setSaveSuccess(true);
       setTimeout(() => {
@@ -116,7 +145,6 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
     setError(null);
 
     try {
-      // Gọi API xóa tập trung: vừa xóa trong Supabase vừa gọi n8n xóa file trên Google Drive
       const res = await fetch('/api/documents/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -168,7 +196,7 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-4">
           {/* Cảnh báo nếu file bị xóa trên Google Drive */}
           {isMissingOnDrive && (
             <div className="flex items-start gap-3 p-3.5 bg-rose-500/10 border border-rose-500/25 rounded-lg text-rose-300 text-xs leading-relaxed">
@@ -177,7 +205,7 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
                 <strong className="font-semibold block text-rose-200 mb-0.5">
                   Cảnh báo: Tệp gốc không tồn tại trên Google Drive
                 </strong>
-                Hệ thống kiểm tra định kỳ phát hiện file này đã bị xóa hoặc chuyển vào thùng rác trên Google Drive. Bạn có thể xóa bản ghi này khỏi hệ thống để tránh lỗi dữ liệu.
+                Hệ thống kiểm tra phát hiện file này đã bị xóa hoặc chuyển vào thùng rác trên Google Drive.
               </div>
             </div>
           )}
@@ -196,24 +224,52 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
             </div>
           )}
 
-          {/* Title input Linear style */}
+          {/* Title input */}
           <div>
-            <label className="block text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-2">
-              Tên tài liệu / Văn bản
+            <label className="block text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-1.5">
+              Tên tài liệu / Tiêu đề văn bản *
             </label>
             <input
               type="text"
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              placeholder="Nhập tiêu đề hoặc số hiệu văn bản..."
-              className="w-full bg-[#18191f] border border-white/[0.08] hover:border-white/[0.15] focus:border-indigo-500/70 rounded-lg px-3.5 py-2.5 text-sm font-medium text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all"
+              placeholder="Nhập tiêu đề hoặc trích yếu văn bản..."
+              className="w-full bg-[#18191f] border border-white/[0.08] hover:border-white/[0.15] focus:border-indigo-500/70 rounded-lg px-3.5 py-2 text-xs font-medium text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all"
             />
+          </div>
+
+          {/* Row 2: Số hiệu văn bản & Đơn vị ban hành */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Hash className="w-3 h-3 text-zinc-500" /> Số / Ký hiệu văn bản
+              </label>
+              <input
+                type="text"
+                value={documentCode}
+                onChange={(e) => setDocumentCode(e.target.value)}
+                placeholder="Vd: 123/QĐ-KTQLB"
+                className="w-full bg-[#18191f] border border-white/[0.08] hover:border-white/[0.15] focus:border-indigo-500/70 rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Building className="w-3 h-3 text-zinc-500" /> Đơn vị ban hành
+              </label>
+              <input
+                type="text"
+                value={issuingAuthority}
+                onChange={(e) => setIssuingAuthority(e.target.value)}
+                placeholder="Vd: KTQLB, TCT QLB"
+                className="w-full bg-[#18191f] border border-white/[0.08] hover:border-white/[0.15] focus:border-indigo-500/70 rounded-lg px-3 py-2 text-xs font-medium text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all"
+              />
+            </div>
           </div>
 
           {/* Linear Properties Table */}
           <div className="border border-white/[0.06] rounded-lg overflow-hidden divide-y divide-white/[0.05] bg-[#16171d]">
             {/* Property: Chuyên môn */}
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
+            <div className="flex items-center justify-between px-4 py-2.5 text-xs">
               <span className="text-zinc-400 flex items-center gap-2 font-medium">
                 <Tag className="w-3.5 h-3.5 text-zinc-500" /> Chuyên môn phân loại
               </span>
@@ -221,7 +277,7 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
                 <select
                   value={scopeDomain}
                   onChange={(e) => setScopeDomain(e.target.value)}
-                  className="bg-[#1f2027] border border-white/[0.08] text-zinc-200 text-xs font-medium rounded-md px-3 py-1.5 focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer appearance-none pr-8"
+                  className="bg-[#1f2027] border border-white/[0.08] text-zinc-200 text-xs font-medium rounded-md px-3 py-1 focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer appearance-none pr-8"
                 >
                   {SCOPE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value} className="bg-[#1f2027] text-white">
@@ -236,7 +292,7 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
             </div>
 
             {/* Property: Trạng thái Drive */}
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
+            <div className="flex items-center justify-between px-4 py-2.5 text-xs">
               <span className="text-zinc-400 flex items-center gap-2 font-medium">
                 <Cloud className="w-3.5 h-3.5 text-zinc-500" /> Trạng thái Drive
               </span>
@@ -256,7 +312,7 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
             </div>
 
             {/* Property: Google Drive File ID */}
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
+            <div className="flex items-center justify-between px-4 py-2.5 text-xs">
               <span className="text-zinc-400 flex items-center gap-2 font-medium">
                 <Cloud className="w-3.5 h-3.5 text-zinc-500" /> File ID
               </span>
@@ -277,7 +333,7 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
             </div>
 
             {/* Property: Ngày tạo */}
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
+            <div className="flex items-center justify-between px-4 py-2.5 text-xs">
               <span className="text-zinc-400 flex items-center gap-2 font-medium">
                 <Calendar className="w-3.5 h-3.5 text-zinc-500" /> Ngày số hóa
               </span>
@@ -294,7 +350,7 @@ export default function EditDocumentModal({ isOpen, onClose, document, onSuccess
         </div>
 
         {/* Linear Action Footer */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-t border-white/[0.06] bg-[#14151a]">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-white/[0.06] bg-[#14151a]">
           <div>
             {confirmDelete ? (
               <div className="flex items-center gap-2">

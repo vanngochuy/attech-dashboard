@@ -26,7 +26,12 @@ import {
   ChevronRight,
   Filter,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  ShieldAlert,
+  Loader2,
+  Scale,
+  Building,
+  Hash
 } from 'lucide-react';
 import UploadDocumentModal from '@/components/upload-document-modal';
 import EditDocumentModal from '@/components/edit-document-modal';
@@ -38,9 +43,10 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
-// Danh mục Chuyên môn chuẩn Linear Design System
+// Danh mục Chuyên môn chuẩn Linear Design System (đã thêm VB_PHAP_LUAT)
 const DEPARTMENTS = [
   { id: 'ALL', label: 'Tất cả', dot: 'bg-zinc-400', icon: Layers },
+  { id: 'VB_PHAP_LUAT', label: 'Văn bản Pháp luật', dot: 'bg-blue-400', icon: Scale },
   { id: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật', dot: 'bg-indigo-400', icon: Wrench },
   { id: 'SMS', label: 'An toàn (SMS)', dot: 'bg-emerald-400', icon: ShieldCheck },
   { id: 'PCCC_CHCN', label: 'PCCC & CHCN', dot: 'bg-rose-400', icon: Flame },
@@ -59,6 +65,10 @@ export default function DocumentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [filterMissingOnly, setFilterMissingOnly] = useState(false);
+
+  // Trạng thái Quét trực tiếp Google Drive cho Admin
+  const [isScanningDrive, setIsScanningDrive] = useState(false);
+  const [scanNotification, setScanNotification] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Lấy dữ liệu Supabase
   const fetchDocuments = async () => {
@@ -83,10 +93,14 @@ export default function DocumentsPage() {
     fetchDocuments();
   }, [activeFilter]);
 
-  // Bộ lọc tìm kiếm real-time
+  // Bộ lọc tìm kiếm real-time: tìm theo Tên, Số hiệu văn bản, Đơn vị ban hành
   const filteredDocuments = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     return documents.filter((doc) => {
-      const matchesSearch = doc.file_name?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchName = doc.file_name?.toLowerCase().includes(q);
+      const matchCode = doc.document_code?.toLowerCase().includes(q);
+      const matchIssuer = doc.issuing_authority?.toLowerCase().includes(q);
+      const matchesSearch = !q || matchName || matchCode || matchIssuer;
       const matchesMissing = filterMissingOnly ? doc.sync_status === 'missing_on_drive' : true;
       return matchesSearch && matchesMissing;
     });
@@ -109,6 +123,41 @@ export default function DocumentsPage() {
     if (ext === 'xlsx' || ext === 'xls') return <FileSpreadsheet className="w-4 h-4 text-emerald-400" />;
     if (ext === 'doc' || ext === 'docx') return <FileCode className="w-4 h-4 text-blue-400" />;
     return <FileText className="w-4 h-4 text-indigo-400" />;
+  };
+
+  // Hàm Admin bấm quét Google Drive trực tiếp
+  const handleScanDrive = async () => {
+    setIsScanningDrive(true);
+    setScanNotification(null);
+
+    try {
+      const res = await fetch('/api/documents/sync', {
+        method: 'POST',
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Quét thất bại');
+      }
+
+      setScanNotification({
+        type: 'success',
+        text: 'Đã hoàn tất quét Google Drive! Danh sách đã được làm mới.'
+      });
+
+      await fetchDocuments();
+    } catch (err: any) {
+      console.error('Lỗi quét Drive:', err);
+      setScanNotification({
+        type: 'error',
+        text: err.message || 'Không thể kích hoạt n8n quét Google Drive.'
+      });
+    } finally {
+      setIsScanningDrive(false);
+      setTimeout(() => {
+        setScanNotification(null);
+      }, 5000);
+    }
   };
 
   return (
@@ -140,13 +189,28 @@ export default function DocumentsPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Lọc tài liệu..."
-              className="bg-[#14151a] border border-white/[0.06] hover:border-white/[0.12] focus:border-indigo-500/60 rounded-md pl-8 pr-8 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none transition-all w-48 focus:w-64"
+              placeholder="Tìm theo tên, số hiệu (123/QĐ...), đơn vị..."
+              className="bg-[#14151a] border border-white/[0.06] hover:border-white/[0.12] focus:border-indigo-500/60 rounded-md pl-8 pr-8 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none transition-all w-56 focus:w-72"
             />
             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-zinc-500 pointer-events-none">
               ⌘K
             </span>
           </div>
+
+          {/* Admin Quét Drive Nhanh */}
+          <button
+            onClick={handleScanDrive}
+            disabled={isScanningDrive}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#14151a] hover:bg-[#1a1c24] border border-white/[0.08] hover:border-white/[0.16] text-zinc-300 hover:text-white rounded-md text-xs font-medium transition-all shadow-sm disabled:opacity-50"
+            title="Admin: Kích hoạt n8n quét và kiểm tra sự tồn tại của toàn bộ file trên Google Drive"
+          >
+            {isScanningDrive ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+            ) : (
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+            )}
+            <span className="hidden sm:inline">{isScanningDrive ? 'Đang quét...' : 'Quét Drive'}</span>
+          </button>
 
           {/* Refresh button */}
           <button
@@ -237,13 +301,39 @@ export default function DocumentsPage() {
         </div>
       </div>
 
+      {/* Thông báo kết quả quét Drive (Toast Banner) */}
+      {scanNotification && (
+        <div
+          className={`mx-6 mt-3 p-3 rounded-lg border text-xs flex items-center justify-between transition-all ${
+            scanNotification.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+              : 'bg-rose-500/10 border-rose-500/25 text-rose-300'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {scanNotification.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{scanNotification.text}</span>
+          </div>
+          <button
+            onClick={() => setScanNotification(null)}
+            className="text-[11px] opacity-70 hover:opacity-100 underline ml-2"
+          >
+            Đóng
+          </button>
+        </div>
+      )}
+
       {/* Cảnh báo nếu phát hiện file bị mất trên Google Drive */}
       {missingDriveCount > 0 && (
-        <div className="mx-6 mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-xs text-amber-300 shrink-0">
+        <div className="mx-6 mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-xs text-amber-300 shrink-0">
           <div className="flex items-center gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
             <span>
-              <strong>Cảnh báo đồng bộ định kỳ:</strong> Phát hiện{' '}
+              <strong>Cảnh báo đồng bộ:</strong> Phát hiện{' '}
               <strong className="text-amber-200 underline">{missingDriveCount} tài liệu</strong> đã bị xóa hoặc chuyển vào thùng rác trên Google Drive.
             </span>
           </div>
@@ -302,7 +392,7 @@ export default function DocumentsPage() {
               return (
                 <div
                   key={doc.id}
-                  className={`h-12 px-6 flex items-center justify-between hover:bg-white/[0.02] transition-colors group cursor-pointer ${
+                  className={`h-14 px-6 flex items-center justify-between hover:bg-white/[0.02] transition-colors group cursor-pointer ${
                     isMissingOnDrive ? 'bg-rose-500/[0.02]' : ''
                   }`}
                   onClick={() => {
@@ -310,9 +400,9 @@ export default function DocumentsPage() {
                     else setEditingDoc(doc);
                   }}
                 >
-                  {/* Left info */}
+                  {/* Left info: Status, ID, File Icon, Title, Metadata Badges */}
                   <div className="flex items-center gap-3.5 min-w-0 pr-4">
-                    {/* Status circle Linear style */}
+                    {/* Status circle */}
                     {isMissingOnDrive ? (
                       <div
                         className="w-3.5 h-3.5 rounded-full border border-rose-500/50 bg-rose-500/20 flex items-center justify-center shrink-0"
@@ -337,28 +427,46 @@ export default function DocumentsPage() {
                     {/* File icon */}
                     <div className="shrink-0">{getFileIcon(doc.file_name)}</div>
 
-                    {/* Title */}
-                    <span
-                      className={`text-xs font-medium truncate ${
-                        isMissingOnDrive
-                          ? 'text-zinc-300 line-through decoration-rose-500/40'
-                          : 'text-zinc-200 group-hover:text-white'
-                      }`}
-                    >
-                      {doc.file_name}
-                    </span>
-
-                    {/* Cảnh báo mất file Drive badge */}
-                    {isMissingOnDrive && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/30 shrink-0">
-                        <AlertTriangle className="w-3 h-3 text-rose-400" /> Mất file Drive
+                    {/* Title + Metadata badges */}
+                    <div className="min-w-0 flex items-center gap-2 truncate">
+                      <span
+                        className={`text-xs font-medium truncate ${
+                          isMissingOnDrive
+                            ? 'text-zinc-300 line-through decoration-rose-500/40'
+                            : 'text-zinc-200 group-hover:text-white'
+                        }`}
+                      >
+                        {doc.file_name}
                       </span>
-                    )}
+
+                      {/* Số hiệu văn bản badge (Vd: 123/QĐ-KTQLB) */}
+                      {doc.document_code && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-800/80 text-indigo-300 border border-zinc-700/60 shrink-0">
+                          <Hash className="w-2.5 h-2.5 text-indigo-400" />
+                          {doc.document_code}
+                        </span>
+                      )}
+
+                      {/* Đơn vị ban hành badge (Vd: KTQLB) */}
+                      {doc.issuing_authority && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 shrink-0">
+                          <Building className="w-2.5 h-2.5 text-zinc-500" />
+                          {doc.issuing_authority}
+                        </span>
+                      )}
+
+                      {/* Cảnh báo mất file Drive badge */}
+                      {isMissingOnDrive && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/30 shrink-0">
+                          <AlertTriangle className="w-3 h-3 text-rose-400" /> Mất file Drive
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Right metadata and actions */}
                   <div className="flex items-center gap-4 shrink-0">
-                    {/* Domain Pill Linear style */}
+                    {/* Domain Pill */}
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.04] border border-white/[0.06] text-zinc-300">
                       <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
                       <span>{dept.label}</span>
@@ -467,12 +575,26 @@ export default function DocumentsPage() {
                       </h4>
                     </div>
 
-                    {/* Warning badge in grid */}
-                    {isMissingOnDrive && (
-                      <div className="mb-3 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/30">
-                        <AlertTriangle className="w-3 h-3 text-rose-400" /> Mất file trên Google Drive
-                      </div>
-                    )}
+                    {/* Metadata Badges in Grid */}
+                    <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                      {doc.document_code && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-800/80 text-indigo-300 border border-zinc-700/60">
+                          <Hash className="w-2.5 h-2.5 text-indigo-400" />
+                          {doc.document_code}
+                        </span>
+                      )}
+                      {doc.issuing_authority && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800/60 text-zinc-400 border border-zinc-700/50">
+                          <Building className="w-2.5 h-2.5 text-zinc-500" />
+                          {doc.issuing_authority}
+                        </span>
+                      )}
+                      {isMissingOnDrive && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/30">
+                          <AlertTriangle className="w-3 h-3 text-rose-400" /> Mất file Drive
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Footer */}

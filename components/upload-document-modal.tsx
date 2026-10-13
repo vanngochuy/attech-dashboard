@@ -11,11 +11,14 @@ import {
   Tag,
   FileText,
   ChevronDown,
-  Plus
+  Plus,
+  Scale,
+  Building
 } from 'lucide-react';
 
 const SCOPE_OPTIONS = [
-  { value: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật', dot: 'bg-indigo-400' },
+  { value: 'VB_PHAP_LUAT', label: 'Văn bản Pháp luật & Quy chế', dot: 'bg-blue-400' },
+  { value: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật (CNS, Selex, TUH)', dot: 'bg-indigo-400' },
   { value: 'SMS', label: 'An toàn (SMS)', dot: 'bg-emerald-400' },
   { value: 'PCCC_CHCN', label: 'PCCC & CHCN', dot: 'bg-rose-400' },
   { value: 'PCTT_TKCN', label: 'PCTT & TKCN', dot: 'bg-cyan-400' },
@@ -25,6 +28,7 @@ const SCOPE_OPTIONS = [
 
 const DOC_TYPES = [
   { value: 'QUY_TRINH_HDCV', label: 'Hướng dẫn công việc (SOP)' },
+  { value: 'QUY_DINH_QUY_CHE', label: 'Quy định / Quy chế' },
   { value: 'BAO_CAO', label: 'Báo cáo kỹ thuật' },
   { value: 'BIEN_BAN_KIEM_TRA', label: 'Biên bản kiểm tra' },
   { value: 'KE_HOACH', label: 'Kế hoạch bảo dưỡng' },
@@ -40,7 +44,9 @@ interface UploadDocumentModalProps {
 export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: UploadDocumentModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
-  const [scopeDomain, setScopeDomain] = useState('QL_KY_THUAT');
+  const [documentCode, setDocumentCode] = useState('');
+  const [issuingAuthority, setIssuingAuthority] = useState('');
+  const [scopeDomain, setScopeDomain] = useState('VB_PHAP_LUAT');
   const [docType, setDocType] = useState('QUY_TRINH_HDCV');
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +100,8 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
     const formData = new FormData();
     formData.append('file', file);
     formData.append('title', title.trim());
+    formData.append('document_code', documentCode.trim());
+    formData.append('issuing_authority', issuingAuthority.trim());
     formData.append('scope_domain', scopeDomain);
     formData.append('doc_type', docType);
 
@@ -125,7 +133,9 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
   const handleClose = () => {
     setFile(null);
     setTitle('');
-    setScopeDomain('QL_KY_THUAT');
+    setDocumentCode('');
+    setIssuingAuthority('');
+    setScopeDomain('VB_PHAP_LUAT');
     setDocType('QUY_TRINH_HDCV');
     setError(null);
     setSuccess(false);
@@ -167,11 +177,11 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
               </div>
               <h4 className="text-sm font-semibold text-zinc-100 mb-1">Tải lên thành công!</h4>
               <p className="text-zinc-500 text-xs max-w-xs">
-                Tài liệu đã được đẩy sang n8n để tải lên Google Drive và đồng bộ vào Supabase.
+                Tài liệu đã được gửi sang n8n để tải lên thư mục Google Drive tương ứng và đồng bộ vào Supabase.
               </p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-xs">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -181,19 +191,50 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
 
               {/* Title input Linear style */}
               <div>
+                <label className="block text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-1.5">
+                  Tên tài liệu / Tiêu đề văn bản *
+                </label>
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Tên tài liệu hoặc số hiệu công văn..."
-                  className="w-full bg-[#18191f] border border-white/[0.08] hover:border-white/[0.15] focus:border-indigo-500/70 rounded-lg px-4 py-2.5 text-sm font-medium text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all"
+                  placeholder="Nhập tiêu đề hoặc trích yếu nội dung văn bản..."
+                  className="w-full bg-[#18191f] border border-white/[0.08] hover:border-white/[0.15] focus:border-indigo-500/70 rounded-lg px-3.5 py-2 text-xs font-medium text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all"
                 />
+              </div>
+
+              {/* Row 2: Số hiệu văn bản & Đơn vị ban hành */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Số / Ký hiệu văn bản
+                  </label>
+                  <input
+                    type="text"
+                    value={documentCode}
+                    onChange={(e) => setDocumentCode(e.target.value)}
+                    placeholder="Vd: 123/QĐ-KTQLB, 03/2009/NĐ-CP"
+                    className="w-full bg-[#18191f] border border-white/[0.08] hover:border-white/[0.15] focus:border-indigo-500/70 rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Đơn vị ban hành
+                  </label>
+                  <input
+                    type="text"
+                    value={issuingAuthority}
+                    onChange={(e) => setIssuingAuthority(e.target.value)}
+                    placeholder="Vd: KTQLB, TCT QLB, Bộ GTVT"
+                    className="w-full bg-[#18191f] border border-white/[0.08] hover:border-white/[0.15] focus:border-indigo-500/70 rounded-lg px-3 py-2 text-xs font-medium text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all"
+                  />
+                </div>
               </div>
 
               {/* Drag & Drop Zone */}
               <div>
                 <div
-                  className={`border border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${
+                  className={`border border-dashed rounded-xl p-5 text-center transition-all cursor-pointer ${
                     file
                       ? 'border-indigo-500/50 bg-indigo-500/[0.03]'
                       : 'border-white/[0.1] hover:border-white/[0.2] bg-[#16171d]/60 hover:bg-[#16171d]'
@@ -236,11 +277,11 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
                     </div>
                   ) : (
                     <div className="flex flex-col items-center">
-                      <UploadCloud className="w-8 h-8 text-zinc-500 mb-2" />
+                      <UploadCloud className="w-7 h-7 text-zinc-500 mb-1.5" />
                       <span className="text-xs font-medium text-zinc-300">
                         Kéo thả file vào đây hoặc nhấn để duyệt
                       </span>
-                      <span className="text-[11px] text-zinc-500 mt-1 font-mono">
+                      <span className="text-[11px] text-zinc-500 mt-0.5 font-mono">
                         Hỗ trợ PDF, Word, Excel (Max 50MB)
                       </span>
                     </div>
@@ -253,7 +294,7 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
                 {/* Chuyên môn */}
                 <div className="bg-[#16171d] border border-white/[0.06] rounded-lg p-2.5">
                   <label className="block text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">
-                    Chuyên môn
+                    Chuyên môn & Thư mục Drive
                   </label>
                   <div className="relative">
                     <select
@@ -294,7 +335,7 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
               </div>
 
               {/* Action Buttons Linear style */}
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/[0.06]">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/[0.06]">
                 <button
                   type="button"
                   onClick={handleClose}
