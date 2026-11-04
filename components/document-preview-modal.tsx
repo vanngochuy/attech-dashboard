@@ -24,16 +24,16 @@ export function DocumentPreviewModal({ fileId, onClose }: DocumentPreviewModalPr
   const viewUrl = `https://drive.google.com/file/d/${fileId}/preview`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6 animate-in fade-in duration-150">
-      <div className="bg-[#121316] border border-white/[0.08] rounded-xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden font-sans">
-        {/* Linear Header */}
-        <div className="h-12 flex items-center justify-between px-5 border-b border-white/[0.06] bg-[#14151a]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 sm:p-6 animate-in fade-in duration-150">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden font-sans">
+        {/* Header */}
+        <div className="h-14 flex items-center justify-between px-6 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2.5">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs font-semibold text-zinc-200">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span className="text-xs font-bold text-slate-900">
               Xem Trước Văn Bản (Google Drive Preview)
             </span>
-            <span className="font-mono text-[11px] text-zinc-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
+            <span className="font-mono text-[11px] text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
               {fileId}
             </span>
           </div>
@@ -43,22 +43,22 @@ export function DocumentPreviewModal({ fileId, onClose }: DocumentPreviewModalPr
               href={viewUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-200/70 border border-slate-200 bg-white transition-colors shadow-xs"
               title="Mở Google Drive"
             >
               <ExternalLink className="w-3.5 h-3.5" />
               <span>Drive tab mới</span>
             </a>
 
-            <div className="w-px h-4 bg-white/[0.08] mx-1" />
+            <div className="w-px h-4 bg-slate-200 mx-1" />
 
-            <span className="text-[11px] font-mono text-zinc-500 bg-white/[0.03] px-1.5 py-0.5 rounded border border-white/[0.05]">
+            <span className="text-[11px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
               ESC
             </span>
 
             <button
               onClick={onClose}
-              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
               title="Đóng (Esc)"
             >
               <X className="w-4 h-4" />
@@ -67,7 +67,7 @@ export function DocumentPreviewModal({ fileId, onClose }: DocumentPreviewModalPr
         </div>
 
         {/* Iframe View */}
-        <div className="flex-1 bg-[#0a0b0d] relative overflow-hidden">
+        <div className="flex-1 bg-slate-100 relative overflow-hidden">
           <iframe
             src={viewUrl}
             className="w-full h-full border-none absolute inset-0 z-10 bg-white"

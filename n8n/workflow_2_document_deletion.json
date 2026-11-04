@@ -1,0 +1,106 @@
+{
+  "name": "ATTECH - API: Document Deletion",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "document-delete",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-delete",
+      "name": "Webhook (Từ Web Next.js)1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "deleteFile",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.body.drive_file_id || $json.body.driveFileId }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "gdrive-delete",
+      "name": "Xóa file trên Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        480,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=DELETE FROM document_files WHERE drive_file_id = '{{ $('Webhook (Từ Web Next.js)1').item.json.body.drive_file_id || $('Webhook (Từ Web Next.js)1').item.json.body.driveFileId }}' RETURNING id, file_name;",
+        "options": {}
+      },
+      "id": "pg-delete",
+      "name": "Xóa bản ghi (Supabase)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, deletedFileId: $('Webhook (Từ Web Next.js)1').item.json.body.drive_file_id || $('Webhook (Từ Web Next.js)1').item.json.body.driveFileId, result: $json } }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Phản hồi Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        920,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (Từ Web Next.js)1": {
+      "main": [
+        [
+          {
+            "node": "Xóa file trên Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Xóa file trên Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Xóa bản ghi (Supabase)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Xóa bản ghi (Supabase)": {
+      "main": [
+        [
+          {
+            "node": "Phản hồi Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

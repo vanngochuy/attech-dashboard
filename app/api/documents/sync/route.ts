@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const prodWebhookUrl = 'http://localhost:5678/webhook/sync-drive-health';
-    const testWebhookUrl = 'http://localhost:5678/webhook-test/sync-drive-health';
+    const prodWebhookUrl = process.env.N8N_SYNC_WEBHOOK_URL || 'http://localhost:5678/webhook/sync-drive-health';
+    const testWebhookUrl = prodWebhookUrl.replace('/webhook/', '/webhook-test/');
+    const fallbackWebhookUrl = 'http://localhost:5678/webhook/drive-sync-audit';
 
     // 1. Thử gửi tới Production Webhook
     let n8nRes = await fetch(prodWebhookUrl, {
@@ -12,15 +13,24 @@ export async function POST(request: Request) {
       body: JSON.stringify({ triggered_by: 'admin_web_dashboard', timestamp: new Date().toISOString() }),
     });
 
-    // 2. Nếu trả về 404 (chưa bật Active), thử gửi tiếp tới Test Webhook
+    // 2. Nếu trả về 404, thử fallback sang drive-sync-audit hoặc test webhook
     if (n8nRes.status === 404) {
-      const testRes = await fetch(testWebhookUrl, {
+      const fallbackRes = await fetch(fallbackWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ triggered_by: 'admin_web_dashboard', timestamp: new Date().toISOString() }),
       });
-      if (testRes.ok) {
-        n8nRes = testRes;
+      if (fallbackRes.ok) {
+        n8nRes = fallbackRes;
+      } else {
+        const testRes = await fetch(testWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ triggered_by: 'admin_web_dashboard', timestamp: new Date().toISOString() }),
+        });
+        if (testRes.ok) {
+          n8nRes = testRes;
+        }
       }
     }
 

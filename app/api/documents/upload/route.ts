@@ -1,13 +1,19 @@
 import { NextResponse } from 'next/server';
+import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase';
+import { extractDocumentOcr } from '@/lib/ocr';
+
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    
-    // N8N Webhook URL (cấu hình trong file .env.local)
-    // Ví dụ: https://n8n.your-domain.com/webhook/document-upload
+    const replacesDocId = formData.get('replaces_doc_id') as string | null;
+    const initialStatus = formData.get('initial_status') as string | null; // 'SUPERSEDED' nếu tải lên văn bản có ngày ban hành cũ hơn bản hiện có
+    const skipOcr = formData.get('skip_ocr') === 'true';
+    const file = formData.get('file') as File | null;
+    const title = (formData.get('title') as string | null)?.trim() || '';
+
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
-    
     if (!n8nWebhookUrl) {
       return NextResponse.json(
         { error: 'N8N_WEBHOOK_URL is not configured' },
@@ -15,12 +21,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Proxy request tới n8n webhook
-    const response = await fetch(n8nWebhookUrl, {
-      method: 'POST',
-      body: formData,
-      // Không cần set Content-Type, fetch sẽ tự set boundary cho FormData
-    });
+    // Chuẩn bị buffer để chạy song song: (1) Đẩy sang n8n lưu Drive + DB, (2) Đọc OCR 1 lần bằng Gemini (nếu không bật skip_ocr)
+    let fileBuffer: Buffer | null = null;
+    if (file && !skipOcr) {
+      const ab = await file.arrayBuffer();
+      fileBuffer = Buffer.from(ab);
+    }
+
+    const [response, ocrContent] = await Promise.all([
+      fetch(n8nWebhookUrl, {
+        method: 'POST',
+        body: formData,
+      }),
+      fileBuffer && file && !skipOcr
+        ? extractDocumentOcr(fileBuffer, file.type || 'application/pdf', file.name)
+        : Promise.resolve(null),
+    ]);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -31,15 +47,85 @@ export async function POST(request: Request) {
       );
     }
 
-    // N8n trả về kết quả
     const data = await response.json().catch(() => ({ status: 'ok' }));
-    
+
+    if (isSupabaseAdminConfigured()) {
+      const supabase = getSupabaseAdminClient();
+      if (supabase) {
+        // 1. Lưu kết quả OCR 1 lần và/hoặc trạng thái ban đầu (nếu là văn bản lịch sử cũ hơn bản hiện hành)
+        if (ocrContent || initialStatus === 'SUPERSEDED') {
+          try {
+            let targetDocId: string | null =
+              data?.file?.id || (Array.isArray(data?.file) ? data.file[0]?.id : null) || null;
+
+            // Nếu webhook n8n không trả trực tiếp id, tìm bản ghi mới nhất vừa tạo theo tên
+            if (!targetDocId && title) {
+              const { data: latestDocs } = await supabase
+                .from('document_files')
+                .select('id')
+                .eq('file_name', title)
+                .order('created_at', { ascending: false })
+                .limit(1);
+              if (latestDocs && latestDocs.length > 0) {
+                targetDocId = latestDocs[0].id;
+              }
+            }
+
+            if (targetDocId) {
+              const updatePayload: Record<string, any> = {
+                updated_at: new Date().toISOString(),
+              };
+              if (ocrContent) {
+                updatePayload.ocr_content = ocrContent;
+              }
+              if (initialStatus === 'SUPERSEDED') {
+                updatePayload.status = 'SUPERSEDED';
+              }
+
+              const { error: ocrUpdateErr } = await supabase
+                .from('document_files')
+                .update(updatePayload)
+                .eq('id', targetDocId);
+
+              if (ocrUpdateErr) {
+                console.warn('[Upload API] Lỗi cập nhật ocr_content/status vào Supabase:', ocrUpdateErr);
+              } else {
+                console.log(`[Upload API] Đã cập nhật văn bản mới ${targetDocId} (OCR: ${!!ocrContent}, Status: ${initialStatus || 'ACTIVE'})`);
+              }
+            }
+          } catch (ocrSaveErr) {
+            console.warn('[Upload API] Ngoại lệ khi lưu ocr_content/status:', ocrSaveErr);
+          }
+        }
+
+        // 2. Nếu văn bản này thay thế văn bản cũ, cập nhật trạng thái văn bản cũ thành SUPERSEDED
+        if (replacesDocId) {
+          try {
+            const { error: updateOldError } = await supabase
+              .from('document_files')
+              .update({
+                status: 'SUPERSEDED',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', replacesDocId);
+            if (updateOldError) {
+              console.warn('[Upload API] Lỗi đánh dấu văn bản cũ hết hiệu lực:', updateOldError);
+            } else {
+              console.log(`[Upload API] Đã đánh dấu văn bản cũ ${replacesDocId} thành SUPERSEDED.`);
+            }
+          } catch (subErr) {
+            console.warn('[Upload API] Lỗi khi xử lý Supabase replacement:', subErr);
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: 'Document uploaded and sent to n8n for processing successfully',
-      data
+      hasOcr: !!ocrContent,
+      message: 'Document uploaded, OCR extracted, and saved successfully',
+      data,
     });
-    
   } catch (error: any) {
     console.error('Error in Document Upload API Proxy:', error);
     return NextResponse.json(

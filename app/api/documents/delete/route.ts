@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
+import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
+    if (!isSupabaseAdminConfigured()) {
+      return NextResponse.json(
+        { error: 'Supabase chưa được cấu hình trong .env.local' },
+        { status: 500 }
+      );
+    }
+
+    const supabase = getSupabaseAdminClient()!;
     const { id, drive_file_id } = await request.json();
 
     if (!id) {

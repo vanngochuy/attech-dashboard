@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { Suspense, useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search,
   Plus,
@@ -31,39 +32,58 @@ import {
   Loader2,
   Scale,
   Building,
-  Hash
+  Hash,
+  Calendar,
+  History,
+  Ban,
+  Bot
 } from 'lucide-react';
 import UploadDocumentModal from '@/components/upload-document-modal';
 import EditDocumentModal from '@/components/edit-document-modal';
 import { DocumentPreviewModal } from '@/components/document-preview-modal';
-import { createClient } from '@supabase/supabase-js';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { abbreviateIssuer } from '@/lib/issuer';
+import { useAssistant } from '@/components/assistant-context';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
-
-// Danh mục Chuyên môn chuẩn Linear Design System (đã thêm VB_PHAP_LUAT)
+// Danh mục Chuyên môn
 const DEPARTMENTS = [
-  { id: 'ALL', label: 'Tất cả', dot: 'bg-zinc-400', icon: Layers },
-  { id: 'VB_PHAP_LUAT', label: 'Văn bản Pháp luật', dot: 'bg-blue-400', icon: Scale },
-  { id: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật', dot: 'bg-indigo-400', icon: Wrench },
-  { id: 'SMS', label: 'An toàn (SMS)', dot: 'bg-emerald-400', icon: ShieldCheck },
-  { id: 'PCCC_CHCN', label: 'PCCC & CHCN', dot: 'bg-rose-400', icon: Flame },
-  { id: 'PCTT_TKCN', label: 'PCTT & TKCN', dot: 'bg-cyan-400', icon: Waves },
-  { id: 'ATVSLD', label: 'An toàn VSLĐ', dot: 'bg-amber-400', icon: HardHat },
-  { id: 'CONG_TRINH_HK', label: 'Công trình HK', dot: 'bg-purple-400', icon: Building2 },
+  { id: 'ALL', label: 'Tất cả chuyên môn', dot: 'bg-slate-400', icon: Layers },
+  { id: 'VB_PHAP_LUAT', label: 'Văn bản Pháp luật & Quy chế', dot: 'bg-blue-500', icon: Scale },
+  { id: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật (CNS, Selex)', dot: 'bg-indigo-500', icon: Wrench },
+  { id: 'SMS', label: 'An toàn (SMS)', dot: 'bg-emerald-500', icon: ShieldCheck },
+  { id: 'PCCC_CHCN', label: 'PCCC & CHCN', dot: 'bg-rose-500', icon: Flame },
+  { id: 'PCTT_TKCN', label: 'PCTT & TKCN', dot: 'bg-cyan-500', icon: Waves },
+  { id: 'ATVSLD', label: 'An toàn VSLĐ', dot: 'bg-amber-500', icon: HardHat },
+  { id: 'CONG_TRINH_HK', label: 'Công trình Hàng không', dot: 'bg-purple-500', icon: Building2 },
 ];
 
 export default function DocumentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <DocumentsContent />
+    </Suspense>
+  );
+}
+
+function DocumentsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { setDocsContext, selectedDocIds, selectAndAskDoc } = useAssistant();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<any | null>(null);
   const [previewDoc, setPreviewDoc] = useState<string | null>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState('ALL');
+  // Bộ lọc chuyên môn đồng bộ với URL (?dept=...) để sidebar và trang luôn khớp nhau
+  const deptParam = searchParams.get('dept');
+  const activeFilter = deptParam && DEPARTMENTS.some((d) => d.id === deptParam) ? deptParam : 'ALL';
+  const setActiveFilter = useCallback(
+    (id: string) => router.replace(id === 'ALL' ? '/documents' : `/documents?dept=${id}`),
+    [router]
+  );
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUPERSEDED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [filterMissingOnly, setFilterMissingOnly] = useState(false);
 
   // Trạng thái Quét trực tiếp Google Drive cho Admin
@@ -72,12 +92,13 @@ export default function DocumentsPage() {
 
   // Lấy dữ liệu Supabase
   const fetchDocuments = async () => {
-    setIsLoading(true);
-    let query = supabase.from('document_files').select('*').order('created_at', { ascending: false });
-
-    if (activeFilter !== 'ALL') {
-      query = query.contains('department_access', [activeFilter]);
+    if (!isSupabaseConfigured()) {
+      setIsLoading(false);
+      return;
     }
+    setIsLoading(true);
+    // Nạp toàn bộ tài liệu một lần; lọc chuyên môn thực hiện phía client để số đếm luôn đúng
+    let query = supabase.from('document_files').select('*').order('created_at', { ascending: false });
 
     const { data, error } = await query;
     if (error) {
@@ -91,20 +112,65 @@ export default function DocumentsPage() {
 
   useEffect(() => {
     fetchDocuments();
-  }, [activeFilter]);
+  }, []);
 
-  // Bộ lọc tìm kiếm real-time: tìm theo Tên, Số hiệu văn bản, Đơn vị ban hành
+  // Đếm số lượng tài liệu theo từng chuyên mục
+  const departmentCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    DEPARTMENTS.forEach((d) => { map[d.id] = 0; });
+    documents.forEach((doc) => {
+      const dept = doc.department_access?.[0];
+      if (dept && map[dept] !== undefined) map[dept]++;
+      map['ALL'] = (map['ALL'] || 0) + 1;
+    });
+    return map;
+  }, [documents]);
+
+  // Bộ lọc tìm kiếm real-time: tìm theo Tên, Số hiệu văn bản, Đơn vị ban hành, Ngày & Trạng thái hiệu lực
   const filteredDocuments = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return documents.filter((doc) => {
+      const matchesDept = activeFilter === 'ALL' || doc.department_access?.includes(activeFilter);
       const matchName = doc.file_name?.toLowerCase().includes(q);
       const matchCode = doc.document_code?.toLowerCase().includes(q);
-      const matchIssuer = doc.issuing_authority?.toLowerCase().includes(q);
-      const matchesSearch = !q || matchName || matchCode || matchIssuer;
+      const matchIssuer =
+        doc.issuing_authority?.toLowerCase().includes(q) ||
+        abbreviateIssuer(doc.issuing_authority).toLowerCase().includes(q);
+      const matchDate = doc.issue_date?.toLowerCase().includes(q);
+      const matchOcr = doc.ocr_content?.toLowerCase().includes(q);
+      const matchesSearch = !q || matchName || matchCode || matchIssuer || matchDate || matchOcr;
       const matchesMissing = filterMissingOnly ? doc.sync_status === 'missing_on_drive' : true;
-      return matchesSearch && matchesMissing;
+      const matchesStatus =
+        statusFilter === 'ALL'
+          ? true
+          : statusFilter === 'ACTIVE'
+            ? doc.status !== 'SUPERSEDED'
+            : doc.status === 'SUPERSEDED';
+      return matchesDept && matchesSearch && matchesMissing && matchesStatus;
     });
-  }, [documents, searchQuery, filterMissingOnly]);
+  }, [documents, searchQuery, filterMissingOnly, statusFilter, activeFilter]);
+
+  // Chia sẻ danh sách đang lọc cho Trợ lý AI nổi
+  useEffect(() => {
+    const label = DEPARTMENTS.find((d) => d.id === activeFilter)?.label || 'Tất cả chuyên môn';
+    setDocsContext(
+      filteredDocuments.map((d) => ({
+        id: d.id,
+        file_name: d.file_name,
+        document_code: d.document_code,
+        issuing_authority: d.issuing_authority,
+        issue_date: d.issue_date,
+        status: d.status,
+        department_access: d.department_access,
+        drive_file_id: d.drive_file_id,
+        has_ocr: !!d.ocr_content,
+      })),
+      label
+    );
+  }, [filteredDocuments, activeFilter, setDocsContext]);
+
+  // Trợ lý không còn dữ liệu danh sách khi rời trang Tài liệu
+  useEffect(() => () => setDocsContext(null, 'Toàn bộ hệ thống'), [setDocsContext]);
 
   // Đếm số lượng file bị mất trên Google Drive
   const missingDriveCount = useMemo(() => {
@@ -115,14 +181,14 @@ export default function DocumentsPage() {
 
   const getDeptConfig = (code: string) => {
     const found = DEPARTMENTS.find((d) => d.id === code);
-    return found || { id: code, label: code || 'Chung', dot: 'bg-zinc-500', icon: FileText };
+    return found || { id: code, label: code || 'Chung', dot: 'bg-slate-400', icon: FileText };
   };
 
   const getFileIcon = (fileName: string) => {
     const ext = fileName?.split('.').pop()?.toLowerCase();
-    if (ext === 'xlsx' || ext === 'xls') return <FileSpreadsheet className="w-4 h-4 text-emerald-400" />;
-    if (ext === 'doc' || ext === 'docx') return <FileCode className="w-4 h-4 text-blue-400" />;
-    return <FileText className="w-4 h-4 text-indigo-400" />;
+    if (ext === 'xlsx' || ext === 'xls') return <FileSpreadsheet className="w-4 h-4 text-emerald-600" />;
+    if (ext === 'doc' || ext === 'docx') return <FileCode className="w-4 h-4 text-blue-600" />;
+    return <FileText className="w-4 h-4 text-indigo-600" />;
   };
 
   // Hàm Admin bấm quét Google Drive trực tiếp
@@ -161,38 +227,36 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0b0d] text-zinc-100 font-sans selection:bg-indigo-500/20">
-      {/* Linear Top Bar */}
-      <header className="h-14 border-b border-white/[0.06] bg-[#0d0e12]/80 backdrop-blur-md flex items-center justify-between px-6 z-20 shrink-0">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5" />
-            Tài liệu
-          </span>
-          <ChevronRight className="w-3 h-3 text-zinc-600" />
-          <span className="font-semibold text-zinc-200 flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${activeDept.dot}`} />
-            {activeDept.label}
-          </span>
-          <span className="text-[11px] font-mono text-zinc-500 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.05]">
-            {filteredDocuments.length}
-          </span>
-        </div>
-
+    <div className="flex flex-col h-full bg-slate-50 text-slate-800 font-sans selection:bg-indigo-500/20">
+      {/* Top Bar Header */}
+      <header className="h-14 border-b border-slate-200 bg-white flex items-center justify-end px-6 z-20 shrink-0 shadow-xs">
         {/* Right Action Tools */}
         <div className="flex items-center gap-2.5">
+          {/* Trạng thái Google Drive & Supabase (Bên trái khu vực tìm kiếm) */}
+          <div className="hidden lg:flex items-center gap-2 mr-1">
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-xs">
+              <Cloud className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <span className="text-slate-500">Drive:</span>
+              <span className="text-emerald-600 font-bold font-mono">Synced</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-xs">
+              <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="text-slate-500">Supabase:</span>
+              <span className="text-emerald-600 font-bold font-mono">Ready</span>
+            </div>
+          </div>
+
           {/* Search bar */}
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 w-3.5 h-3.5" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Tìm theo tên, số hiệu (123/QĐ...), đơn vị..."
-              className="bg-[#14151a] border border-white/[0.06] hover:border-white/[0.12] focus:border-indigo-500/60 rounded-md pl-8 pr-8 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none transition-all w-56 focus:w-72"
+              className="bg-slate-100 hover:bg-slate-150 focus:bg-white border border-slate-200 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 rounded-lg pl-8 pr-8 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all w-56 focus:w-72 shadow-xs"
             />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-zinc-500 pointer-events-none">
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
               ⌘K
             </span>
           </div>
@@ -201,13 +265,13 @@ export default function DocumentsPage() {
           <button
             onClick={handleScanDrive}
             disabled={isScanningDrive}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#14151a] hover:bg-[#1a1c24] border border-white/[0.08] hover:border-white/[0.16] text-zinc-300 hover:text-white rounded-md text-xs font-medium transition-all shadow-sm disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-medium transition-all shadow-xs disabled:opacity-50"
             title="Admin: Kích hoạt n8n quét và kiểm tra sự tồn tại của toàn bộ file trên Google Drive"
           >
             {isScanningDrive ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
             ) : (
-              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
             )}
             <span className="hidden sm:inline">{isScanningDrive ? 'Đang quét...' : 'Quét Drive'}</span>
           </button>
@@ -216,28 +280,26 @@ export default function DocumentsPage() {
           <button
             onClick={fetchDocuments}
             disabled={isLoading}
-            className="p-1.5 bg-[#14151a] border border-white/[0.06] hover:border-white/[0.12] text-zinc-400 hover:text-zinc-200 rounded-md transition-colors disabled:opacity-50"
+            className="p-2 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 rounded-lg transition-colors shadow-xs disabled:opacity-50"
             title="Làm mới danh sách"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
 
           {/* View toggle */}
-          <div className="flex items-center p-0.5 bg-[#14151a] border border-white/[0.06] rounded-md">
+          <div className="flex items-center p-0.5 bg-slate-100 border border-slate-200 rounded-lg">
             <button
               onClick={() => setViewMode('list')}
-              className={`p-1 rounded transition-colors ${
-                viewMode === 'list' ? 'bg-white/[0.08] text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
+              className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-xs font-semibold' : 'text-slate-500 hover:text-slate-800'
+                }`}
               title="Chế độ Danh sách (List)"
             >
               <List className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-1 rounded transition-colors ${
-                viewMode === 'grid' ? 'bg-white/[0.08] text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
+              className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-xs font-semibold' : 'text-slate-500 hover:text-slate-800'
+                }`}
               title="Chế độ Thẻ (Grid)"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
@@ -247,24 +309,25 @@ export default function DocumentsPage() {
           {/* New Document Button */}
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-md text-xs font-medium transition-all shadow-sm shadow-indigo-600/30"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-xs font-semibold transition-all shadow-sm shadow-indigo-600/30"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Thêm tài liệu</span>
-            <span className="text-[10px] text-indigo-200/60 font-mono ml-0.5">C</span>
+            <span className="text-[10px] text-indigo-200 font-mono ml-0.5">C</span>
           </button>
         </div>
       </header>
 
-      {/* Linear Sub-header / Filter Pills Bar */}
-      <div className="border-b border-white/[0.06] bg-[#0c0d10] px-6 py-2 flex items-center justify-between overflow-x-auto no-scrollbar shrink-0">
+      {/* Sub-header / Filter Pills Bar (Khung Chuyên môn Sáng & Rõ nét) */}
+      <div className="border-b border-slate-200 bg-white px-6 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar shrink-0 shadow-xs">
         {/* Department Pills */}
-        <div className="flex items-center gap-1.5">
-          <div className="text-zinc-500 text-[11px] uppercase tracking-wider font-semibold mr-1.5 flex items-center gap-1">
-            <Filter className="w-3 h-3" /> Chuyên môn:
+        <div className="flex items-center gap-2">
+          <div className="text-slate-500 text-xs uppercase tracking-wider font-semibold mr-1 flex items-center gap-1.5 shrink-0">
+            <Filter className="w-3.5 h-3.5 text-indigo-600" /> Chuyên môn:
           </div>
           {DEPARTMENTS.map((dept) => {
             const isActive = activeFilter === dept.id;
+            const count = departmentCounts[dept.id] || 0;
             return (
               <button
                 key={dept.id}
@@ -272,55 +335,46 @@ export default function DocumentsPage() {
                   setActiveFilter(dept.id);
                   setFilterMissingOnly(false);
                 }}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-all ${
-                  isActive
-                    ? 'bg-white/[0.08] text-white font-medium border border-white/[0.12] shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03] border border-transparent'
-                }`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 ${isActive
+                    ? 'bg-indigo-600 text-white shadow-xs border border-indigo-600 font-semibold'
+                    : 'bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 border border-slate-200'
+                  }`}
               >
-                <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
+                <span className={`w-2 h-2 rounded-full ${dept.dot}`} />
                 <span>{dept.label}</span>
+                <span
+                  className={`text-[11px] font-mono px-1.5 py-0.2 rounded-full ${isActive
+                      ? 'bg-indigo-700 text-white'
+                      : 'bg-white text-slate-600 border border-slate-200/80'
+                    }`}
+                >
+                  {count}
+                </span>
               </button>
             );
           })}
-        </div>
-
-        {/* Integration Status Badges */}
-        <div className="hidden lg:flex items-center gap-3 text-[11px] text-zinc-500">
-          <div className="flex items-center gap-1.5">
-            <Cloud className="w-3 h-3 text-indigo-400" />
-            <span>Google Drive:</span>
-            <span className="text-zinc-300 font-mono">Synced</span>
-          </div>
-          <span className="text-zinc-700">•</span>
-          <div className="flex items-center gap-1.5">
-            <Database className="w-3 h-3 text-emerald-400" />
-            <span>Supabase RAG:</span>
-            <span className="text-zinc-300 font-mono">Ready</span>
-          </div>
         </div>
       </div>
 
       {/* Thông báo kết quả quét Drive (Toast Banner) */}
       {scanNotification && (
         <div
-          className={`mx-6 mt-3 p-3 rounded-lg border text-xs flex items-center justify-between transition-all ${
-            scanNotification.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
-              : 'bg-rose-500/10 border-rose-500/25 text-rose-300'
-          }`}
+          className={`mx-6 mt-3 p-3 rounded-lg border text-xs flex items-center justify-between transition-all ${scanNotification.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+            }`}
         >
           <div className="flex items-center gap-2">
             {scanNotification.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             ) : (
-              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             )}
-            <span>{scanNotification.text}</span>
+            <span className="font-medium">{scanNotification.text}</span>
           </div>
           <button
             onClick={() => setScanNotification(null)}
-            className="text-[11px] opacity-70 hover:opacity-100 underline ml-2"
+            className="text-[11px] opacity-70 hover:opacity-100 underline ml-2 font-medium"
           >
             Đóng
           </button>
@@ -329,17 +383,17 @@ export default function DocumentsPage() {
 
       {/* Cảnh báo nếu phát hiện file bị mất trên Google Drive */}
       {missingDriveCount > 0 && (
-        <div className="mx-6 mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-xs text-amber-300 shrink-0">
+        <div className="mx-6 mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between text-xs text-amber-800 shrink-0 shadow-xs">
           <div className="flex items-center gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
               <strong>Cảnh báo đồng bộ:</strong> Phát hiện{' '}
-              <strong className="text-amber-200 underline">{missingDriveCount} tài liệu</strong> đã bị xóa hoặc chuyển vào thùng rác trên Google Drive.
+              <strong className="text-amber-900 underline">{missingDriveCount} tài liệu</strong> đã bị xóa hoặc chuyển vào thùng rác trên Google Drive.
             </span>
           </div>
           <button
             onClick={() => setFilterMissingOnly(!filterMissingOnly)}
-            className="px-2.5 py-1 rounded text-[11px] font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 transition-colors"
+            className="px-2.5 py-1 rounded text-[11px] font-medium bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors"
           >
             {filterMissingOnly ? 'Hiện tất cả tài liệu' : 'Lọc tài liệu lỗi'}
           </button>
@@ -349,321 +403,453 @@ export default function DocumentsPage() {
       {/* Main Document Content */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="p-16 flex flex-col items-center justify-center text-zinc-500 text-xs gap-3">
-            <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+          <div className="p-16 flex flex-col items-center justify-center text-slate-500 text-xs gap-3">
+            <div className="w-6 h-6 border-2 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin" />
             <span>Đang đồng bộ dữ liệu từ Supabase...</span>
           </div>
-        ) : filteredDocuments.length === 0 ? (
-          <div className="p-20 flex flex-col items-center justify-center text-zinc-500 text-xs gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-center text-zinc-600">
-              <FileText className="w-5 h-5" />
+        ) : !isSupabaseConfigured() ? (
+          <div className="p-16 flex flex-col items-center justify-center text-center max-w-lg mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-600 mb-4 shadow-sm">
+              <AlertTriangle className="w-6 h-6" />
             </div>
-            <span className="text-zinc-400 font-medium">Không tìm thấy tài liệu phù hợp</span>
-            <p className="text-zinc-600 max-w-sm text-center">
-              {filterMissingOnly
-                ? 'Không có tài liệu nào bị lỗi mất file Google Drive.'
-                : 'Chưa có tài liệu nào thuộc chuyên đề này. Nhấn nút "Thêm tài liệu" để đưa tài liệu mới vào hệ thống.'}
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Chưa cấu hình Supabase Database</h3>
+            <p className="text-xs text-slate-600 leading-relaxed mb-4">
+              Hệ thống cần kết nối với Supabase để lưu trữ và tải danh sách tài liệu. Hiện tại biến <code className="px-1.5 py-0.5 rounded bg-slate-200 text-amber-800 font-mono">NEXT_PUBLIC_SUPABASE_URL</code> trong file <code className="px-1.5 py-0.5 rounded bg-slate-200 text-amber-800 font-mono">.env.local</code> chưa được thiết lập URL chính xác.
             </p>
-            {filterMissingOnly ? (
-              <button
-                onClick={() => setFilterMissingOnly(false)}
-                className="mt-2 px-3 py-1.5 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 text-xs border border-white/[0.06] transition-colors"
-              >
-                Quay lại danh sách
-              </button>
-            ) : (
-              <button
-                onClick={() => setIsUploadModalOpen(true)}
-                className="mt-2 px-3 py-1.5 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 text-xs border border-white/[0.06] transition-colors"
-              >
-                + Tải lên ngay
-              </button>
-            )}
-          </div>
-        ) : viewMode === 'list' ? (
-          /* LINEAR LIST VIEW */
-          <div className="divide-y divide-white/[0.04]">
-            {filteredDocuments.map((doc) => {
-              const deptCode = doc.department_access?.[0] || '';
-              const dept = getDeptConfig(deptCode);
-              const docCode = `DOC-${doc.id.slice(0, 6).toUpperCase()}`;
-              const isMissingOnDrive = doc.sync_status === 'missing_on_drive';
-
-              return (
-                <div
-                  key={doc.id}
-                  className={`h-14 px-6 flex items-center justify-between hover:bg-white/[0.02] transition-colors group cursor-pointer ${
-                    isMissingOnDrive ? 'bg-rose-500/[0.02]' : ''
-                  }`}
-                  onClick={() => {
-                    if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
-                    else setEditingDoc(doc);
-                  }}
-                >
-                  {/* Left info: Status, ID, File Icon, Title, Metadata Badges */}
-                  <div className="flex items-center gap-3.5 min-w-0 pr-4">
-                    {/* Status circle */}
-                    {isMissingOnDrive ? (
-                      <div
-                        className="w-3.5 h-3.5 rounded-full border border-rose-500/50 bg-rose-500/20 flex items-center justify-center shrink-0"
-                        title="Cảnh báo: File không còn tồn tại trên Google Drive"
-                      >
-                        <div className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
-                      </div>
-                    ) : (
-                      <div
-                        className="w-3.5 h-3.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 flex items-center justify-center shrink-0"
-                        title="Đã đồng bộ Google Drive & Supabase"
-                      >
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      </div>
-                    )}
-
-                    {/* ID */}
-                    <span className="font-mono text-xs text-zinc-500 shrink-0 font-medium">
-                      {docCode}
-                    </span>
-
-                    {/* File icon */}
-                    <div className="shrink-0">{getFileIcon(doc.file_name)}</div>
-
-                    {/* Title + Metadata badges */}
-                    <div className="min-w-0 flex items-center gap-2 truncate">
-                      <span
-                        className={`text-xs font-medium truncate ${
-                          isMissingOnDrive
-                            ? 'text-zinc-300 line-through decoration-rose-500/40'
-                            : 'text-zinc-200 group-hover:text-white'
-                        }`}
-                      >
-                        {doc.file_name}
-                      </span>
-
-                      {/* Số hiệu văn bản badge (Vd: 123/QĐ-KTQLB) */}
-                      {doc.document_code && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-800/80 text-indigo-300 border border-zinc-700/60 shrink-0">
-                          <Hash className="w-2.5 h-2.5 text-indigo-400" />
-                          {doc.document_code}
-                        </span>
-                      )}
-
-                      {/* Đơn vị ban hành badge (Vd: KTQLB) */}
-                      {doc.issuing_authority && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 shrink-0">
-                          <Building className="w-2.5 h-2.5 text-zinc-500" />
-                          {doc.issuing_authority}
-                        </span>
-                      )}
-
-                      {/* Cảnh báo mất file Drive badge */}
-                      {isMissingOnDrive && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/30 shrink-0">
-                          <AlertTriangle className="w-3 h-3 text-rose-400" /> Mất file Drive
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Right metadata and actions */}
-                  <div className="flex items-center gap-4 shrink-0">
-                    {/* Domain Pill */}
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.04] border border-white/[0.06] text-zinc-300">
-                      <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
-                      <span>{dept.label}</span>
-                    </span>
-
-                    {/* Date */}
-                    <span className="text-[11px] font-mono text-zinc-500 w-16 text-right">
-                      {new Date(doc.created_at).toLocaleDateString('vi-VN', {
-                        day: '2-digit',
-                        month: '2-digit'
-                      })}
-                    </span>
-
-                    {/* Hover Linear Action Pill Buttons */}
-                    <div
-                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {!isMissingOnDrive && (
-                        <button
-                          onClick={() => setPreviewDoc(doc.drive_file_id)}
-                          className="p-1.5 rounded hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors"
-                          title="Xem trước tài liệu"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => setEditingDoc(doc)}
-                        className="p-1.5 rounded hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors"
-                        title="Chỉnh sửa siêu dữ liệu / Xóa"
-                      >
-                        <SlidersHorizontal className="w-3.5 h-3.5" />
-                      </button>
-
-                      {!isMissingOnDrive && doc.drive_view_url && (
-                        <a
-                          href={doc.drive_view_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1.5 rounded hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors"
-                          title="Mở Google Drive"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            <div className="w-full bg-white border border-slate-200 rounded-lg p-3.5 text-left font-mono text-[11px] text-slate-700 shadow-xs space-y-1.5">
+              <div className="text-slate-400">// Mở file .env.local và cập nhật thông tin dự án của bạn:</div>
+              <div><span className="text-indigo-600">NEXT_PUBLIC_SUPABASE_URL</span>=<span className="text-emerald-600">&quot;https://xxxx.supabase.co&quot;</span></div>
+              <div><span className="text-indigo-600">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>=<span className="text-emerald-600">&quot;eyJh...&quot;</span></div>
+            </div>
           </div>
         ) : (
-          /* LINEAR GRID / BOARD VIEW */
-          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredDocuments.map((doc) => {
-              const deptCode = doc.department_access?.[0] || '';
-              const dept = getDeptConfig(deptCode);
-              const docCode = `DOC-${doc.id.slice(0, 6).toUpperCase()}`;
-              const isMissingOnDrive = doc.sync_status === 'missing_on_drive';
+          <div className="space-y-4 pb-12">
+            {/* Header Danh sách tệp & Bộ lọc trạng thái */}
+            <div className="px-6 pt-4 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-indigo-600" />
+                  <span>Danh sách văn bản</span>
+                  <span className="text-xs font-mono font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                    {filteredDocuments.length}
+                  </span>
+                </h3>
+                {activeFilter !== 'ALL' && (
+                  <span className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full font-medium">
+                    {activeDept.label}
+                  </span>
+                )}
+              </div>
 
-              return (
-                <div
-                  key={doc.id}
-                  className={`bg-[#121316] border ${
-                    isMissingOnDrive
-                      ? 'border-rose-500/30 hover:border-rose-500/50'
-                      : 'border-white/[0.06] hover:border-white/[0.12]'
-                  } rounded-xl p-4 transition-all hover:bg-[#14151a] group cursor-pointer flex flex-col justify-between`}
-                  onClick={() => {
-                    if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
-                    else setEditingDoc(doc);
-                  }}
+              {/* Status Filter Tabs */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs self-start sm:self-auto shadow-xs">
+                <button
+                  onClick={() => setStatusFilter('ALL')}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${statusFilter === 'ALL'
+                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                      : 'text-slate-600 hover:text-slate-900'
+                    }`}
                 >
-                  <div>
-                    {/* Header */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[11px] text-zinc-500 font-semibold">
-                          {docCode}
-                        </span>
-                        {isMissingOnDrive ? (
-                          <div className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
-                        ) : (
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        )}
-                      </div>
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] bg-white/[0.04] border border-white/[0.06] text-zinc-300">
-                        <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
-                        {dept.label}
-                      </span>
-                    </div>
+                  Tất cả
+                </button>
+                <button
+                  onClick={() => setStatusFilter('ACTIVE')}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${statusFilter === 'ACTIVE'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs font-semibold'
+                      : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" /> Còn hiệu lực
+                </button>
+                <button
+                  onClick={() => setStatusFilter('SUPERSEDED')}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${statusFilter === 'SUPERSEDED'
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200 shadow-xs font-semibold'
+                      : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                  <History className="w-3.5 h-3.5 text-amber-600" /> Đã thay thế
+                </button>
+              </div>
+            </div>
 
-                    {/* Title */}
-                    <div className="flex items-start gap-2.5 mb-2">
-                      <div className="mt-0.5 shrink-0">{getFileIcon(doc.file_name)}</div>
-                      <h4
-                        className={`text-xs font-semibold line-clamp-2 transition-colors ${
-                          isMissingOnDrive
-                            ? 'text-zinc-300 line-through decoration-rose-500/40'
-                            : 'text-zinc-200 group-hover:text-white'
-                        }`}
-                      >
-                        {doc.file_name}
-                      </h4>
+            {/* DANH SÁCH HOẶC LƯỚI KHUNG TÀI LIỆU */}
+            {filteredDocuments.length === 0 ? (
+              <div className="p-16 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 mb-3 shadow-xs">
+                  <FileText className="w-6 h-6 text-indigo-500" />
+                </div>
+                <h4 className="text-sm font-semibold text-slate-900 mb-1">Không tìm thấy tài liệu phù hợp</h4>
+                <p className="text-slate-500 text-xs max-w-sm mb-4">
+                  {filterMissingOnly
+                    ? 'Không có tài liệu nào bị lỗi mất file Google Drive.'
+                    : 'Chưa có tài liệu nào trong lĩnh vực chuyên môn này. Nhấn nút "Thêm tài liệu" để tải văn bản mới vào hệ thống.'}
+                </p>
+                <button
+                  onClick={() => {
+                    setActiveFilter('ALL');
+                    setStatusFilter('ALL');
+                    setFilterMissingOnly(false);
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium border border-slate-200 shadow-xs transition-colors"
+                >
+                  Đặt lại bộ lọc
+                </button>
+              </div>
+            ) : viewMode === 'list' ? (
+              /* TABLE VIEW */
+              <div className="px-6">
+                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                  {/* Table Header */}
+                  <div className="h-11 px-4 flex items-center justify-between bg-slate-100/80 text-xs font-semibold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span className="flex-1">TÊN VĂN BẢN</span>
                     </div>
-
-                    {/* Metadata Badges in Grid */}
-                    <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                      {doc.document_code && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-800/80 text-indigo-300 border border-zinc-700/60">
-                          <Hash className="w-2.5 h-2.5 text-indigo-400" />
-                          {doc.document_code}
-                        </span>
-                      )}
-                      {doc.issuing_authority && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800/60 text-zinc-400 border border-zinc-700/50">
-                          <Building className="w-2.5 h-2.5 text-zinc-500" />
-                          {doc.issuing_authority}
-                        </span>
-                      )}
-                      {isMissingOnDrive && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/30">
-                          <AlertTriangle className="w-3 h-3 text-rose-400" /> Mất file Drive
-                        </span>
-                      )}
+                    <div className="flex items-center gap-4 shrink-0 text-right">
+                      <span className="w-28 text-left hidden sm:inline">SỐ / KÝ HIỆU</span>
+                      <span className="w-28 text-left hidden md:inline">ĐƠN VỊ BAN HÀNH</span>
+                      <span className="w-28 text-center">NGÀY BAN HÀNH</span>
+                      <span className="w-32 text-center hidden lg:inline">CHUYÊN MÔN</span>
+                      <span className="w-28 text-center">HIỆU LỰC</span>
+                      <span className="w-20 text-right">THAO TÁC</span>
                     </div>
                   </div>
 
-                  {/* Footer */}
-                  <div
-                    className="flex items-center justify-between pt-3 border-t border-white/[0.05] text-[11px] text-zinc-500"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <span className="font-mono">
-                      {new Date(doc.created_at).toLocaleDateString('vi-VN')}
-                    </span>
+                  {/* Table Rows */}
+                  <div className="divide-y divide-slate-100">
+                    {filteredDocuments.map((doc) => {
+                      const deptCode = doc.department_access?.[0] || '';
+                      const dept = getDeptConfig(deptCode);
+                      const docCode = `DOC-${doc.id.slice(0, 6).toUpperCase()}`;
+                      const isMissingOnDrive = doc.sync_status === 'missing_on_drive';
+                      const isSuperseded = doc.status === 'SUPERSEDED';
 
-                    <div className="flex items-center gap-1">
-                      {!isMissingOnDrive && (
-                        <button
-                          onClick={() => setPreviewDoc(doc.drive_file_id)}
-                          className="p-1 rounded hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors"
-                          title="Xem trước"
+                      return (
+                        <div
+                          key={doc.id}
+                          className={`h-14 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group cursor-pointer ${isMissingOnDrive
+                              ? 'bg-rose-50/30'
+                              : isSuperseded
+                                ? 'bg-amber-50/20'
+                                : 'bg-white'
+                            }`}
+                          onClick={() => {
+                            if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
+                            else setEditingDoc(doc);
+                          }}
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setEditingDoc(doc)}
-                        className="p-1 rounded hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors"
-                        title="Sửa metadata / Xóa"
-                      >
-                        <SlidersHorizontal className="w-3.5 h-3.5" />
-                      </button>
-                      {!isMissingOnDrive && doc.drive_view_url && (
-                        <a
-                          href={doc.drive_view_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1 rounded hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors"
-                          title="Mở Drive"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                    </div>
+                          {/* Left: Icon + File Name */}
+                          <div className="flex items-center gap-3 min-w-0 pr-4 flex-1">
+                            <div className="shrink-0">{getFileIcon(doc.file_name)}</div>
+                            <span
+                              className={`text-xs font-semibold truncate ${isMissingOnDrive
+                                  ? 'text-slate-400 line-through decoration-rose-500/50'
+                                  : isSuperseded
+                                    ? 'text-slate-600'
+                                    : 'text-slate-900 group-hover:text-indigo-600'
+                                }`}
+                              title={doc.file_name}
+                            >
+                              {doc.file_name}
+                            </span>
+                          </div>
+
+                          {/* Right Columns */}
+                          <div className="flex items-center gap-4 shrink-0">
+                            {/* Số hiệu */}
+                            <span className="w-28 text-left font-mono text-xs text-indigo-700 font-semibold truncate hidden sm:inline">
+                              {doc.document_code || '---'}
+                            </span>
+
+                            {/* Đơn vị */}
+                            <span
+                              className="w-28 text-left text-xs text-slate-700 font-medium truncate hidden md:inline"
+                              title={doc.issuing_authority || undefined}
+                            >
+                              {abbreviateIssuer(doc.issuing_authority)}
+                            </span>
+
+                            {/* Ngày ban hành */}
+                            <span className="w-28 text-center font-mono text-xs text-slate-600">
+                              {doc.issue_date
+                                ? new Date(doc.issue_date).toLocaleDateString('vi-VN')
+                                : '---'}
+                            </span>
+
+                            {/* Chuyên môn */}
+                            <span className="w-32 text-center hidden lg:inline">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                                <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
+                                <span className="truncate max-w-[100px]">{dept.label}</span>
+                              </span>
+                            </span>
+
+                            {/* Trạng thái hiệu lực */}
+                            <span className="w-28 text-center">
+                              {isSuperseded ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                  <History className="w-3 h-3 text-amber-600" /> Đã thay thế
+                                </span>
+                              ) : isMissingOnDrive ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                                  Mất file
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Còn hiệu lực
+                                </span>
+                              )}
+                            </span>
+
+                            {/* Thao tác */}
+                            <div
+                              className="w-24 text-right flex items-center justify-end gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                onClick={() => selectAndAskDoc(doc.id)}
+                                className={`p-1.5 rounded transition-colors ${
+                                  selectedDocIds.includes(doc.id)
+                                    ? 'bg-indigo-600 text-white shadow-2xs'
+                                    : 'hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700'
+                                }`}
+                                title="Ghim văn bản này vào Trợ lý AI để hỏi sâu nội dung"
+                              >
+                                <Bot className="w-3.5 h-3.5" />
+                              </button>
+                              {!isMissingOnDrive && (
+                                <button
+                                  onClick={() => setPreviewDoc(doc.drive_file_id)}
+                                  className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors"
+                                  title="Xem trước"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setEditingDoc(doc)}
+                                className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
+                                title="Sửa metadata"
+                              >
+                                <SlidersHorizontal className="w-3.5 h-3.5" />
+                              </button>
+                              {!isMissingOnDrive && doc.drive_view_url && (
+                                <a
+                                  href={doc.drive_view_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
+                                  title="Mở Google Drive"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ) : (
+              /* GRID / CARD VIEW (Kiểu Thẻ Google Drive) */
+              <div className="px-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredDocuments.map((doc) => {
+                  const deptCode = doc.department_access?.[0] || '';
+                  const dept = getDeptConfig(deptCode);
+                  const docCode = `DOC-${doc.id.slice(0, 6).toUpperCase()}`;
+                  const isMissingOnDrive = doc.sync_status === 'missing_on_drive';
+                  const isSuperseded = doc.status === 'SUPERSEDED';
+
+                  return (
+                    <div
+                      key={doc.id}
+                      className={`bg-white border ${isMissingOnDrive
+                          ? 'border-rose-300 hover:border-rose-400'
+                          : isSuperseded
+                            ? 'border-amber-300 hover:border-amber-400 opacity-95 hover:opacity-100'
+                            : 'border-slate-200 hover:border-indigo-400 hover:shadow-md'
+                        } rounded-xl overflow-hidden transition-all group cursor-pointer flex flex-col justify-between shadow-xs`}
+                      onClick={() => {
+                        if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
+                        else setEditingDoc(doc);
+                      }}
+                    >
+                      {/* 1. Header Khung: Icon + Tên tài liệu + Hiệu lực + Actions */}
+                      <div className="p-3.5 pb-2.5 flex items-start justify-between gap-2 border-b border-slate-100 bg-slate-50/70">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="p-2 rounded-lg bg-white border border-slate-200 shadow-xs shrink-0">
+                            {getFileIcon(doc.file_name)}
+                          </div>
+                          <div className="min-w-0">
+                            <h4
+                              className={`text-xs font-bold truncate ${isMissingOnDrive
+                                  ? 'line-through text-slate-400'
+                                  : isSuperseded
+                                    ? 'text-slate-600'
+                                    : 'text-slate-900 group-hover:text-indigo-600'
+                                } transition-colors`}
+                              title={doc.file_name}
+                            >
+                              {doc.file_name}
+                            </h4>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {isSuperseded ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                  <History className="w-2.5 h-2.5 text-amber-600" /> Hết hiệu lực
+                                </span>
+                              ) : isMissingOnDrive ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                  Mất file
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <span className="w-1 h-1 rounded-full bg-emerald-500" /> Hiệu lực
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Quick actions */}
+                        <div
+                          className="flex items-center gap-0.5 shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            onClick={() => selectAndAskDoc(doc.id)}
+                            className={`p-1 rounded transition-colors ${
+                              selectedDocIds.includes(doc.id)
+                                ? 'bg-indigo-600 text-white shadow-2xs'
+                                : 'hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700'
+                            }`}
+                            title="Ghim văn bản này vào Trợ lý AI để hỏi sâu nội dung"
+                          >
+                            <Bot className="w-3.5 h-3.5" />
+                          </button>
+                          {!isMissingOnDrive && (
+                            <button
+                              onClick={() => setPreviewDoc(doc.drive_file_id)}
+                              className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-indigo-600 transition-colors"
+                              title="Xem trước"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setEditingDoc(doc)}
+                            className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-colors"
+                            title="Chỉnh sửa metadata"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                          </button>
+                          {!isMissingOnDrive && doc.drive_view_url && (
+                            <a
+                              href={doc.drive_view_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-colors"
+                              title="Mở Google Drive"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 2. Thân Khung: 4 trường thông tin chi tiết */}
+                      <div className="p-3.5 space-y-2 bg-white flex-1">
+                        {/* Số hiệu văn bản */}
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500 flex items-center gap-1.5 font-medium">
+                            <Hash className="w-3 h-3 text-slate-400" /> Số hiệu:
+                          </span>
+                          <span className="font-mono font-semibold text-indigo-700 truncate max-w-[150px]">
+                            {doc.document_code || '---'}
+                          </span>
+                        </div>
+
+                        {/* Đơn vị ban hành */}
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500 flex items-center gap-1.5 font-medium">
+                            <Building className="w-3 h-3 text-slate-400" /> Đơn vị:
+                          </span>
+                          <span
+                            className="text-slate-800 font-medium truncate max-w-[150px]"
+                            title={doc.issuing_authority || undefined}
+                          >
+                            {abbreviateIssuer(doc.issuing_authority)}
+                          </span>
+                        </div>
+
+                        {/* Ngày ban hành */}
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500 flex items-center gap-1.5 font-medium">
+                            <Calendar className="w-3 h-3 text-slate-400" /> Ban hành:
+                          </span>
+                          <span className="font-mono text-slate-700 font-medium">
+                            {doc.issue_date
+                              ? new Date(doc.issue_date).toLocaleDateString('vi-VN')
+                              : '---'}
+                          </span>
+                        </div>
+
+                        {/* Chuyên môn */}
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                          <span className="text-slate-500 font-medium">Chuyên môn:</span>
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
+                            <span className="truncate max-w-[120px]">{dept.label}</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 3. Đáy khung: Ngày tải lên hệ thống */}
+                      <div className="px-3.5 py-2 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-[11px] text-slate-500">
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>Tải lên:</span>
+                          <span className="font-mono text-slate-600">
+                            {doc.created_at ? new Date(doc.created_at).toLocaleDateString('vi-VN') : '---'}
+                          </span>
+                        </div>
+                        {doc.sync_status === 'synced' && (
+                          <span className="text-emerald-700 flex items-center gap-1 text-[10px] font-medium">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Đã đồng bộ
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Modal Upload */}
+      {/* Modal Thêm tài liệu mới */}
       <UploadDocumentModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
-        onSuccess={() => {
-          setIsUploadModalOpen(false);
-          fetchDocuments();
-        }}
+        onSuccess={fetchDocuments}
       />
 
-      {/* Modal Sửa Metadata */}
-      <EditDocumentModal
-        isOpen={!!editingDoc}
-        onClose={() => setEditingDoc(null)}
-        document={editingDoc}
-        onSuccess={() => {
-          fetchDocuments();
-        }}
-      />
+      {/* Modal Chỉnh sửa metadata */}
+      {editingDoc && (
+        <EditDocumentModal
+          isOpen={!!editingDoc}
+          document={editingDoc}
+          onClose={() => setEditingDoc(null)}
+          onSuccess={() => {
+            setEditingDoc(null);
+            fetchDocuments();
+          }}
+        />
+      )}
 
-      {/* Modal Xem Trước File */}
+      {/* Modal Xem trước file từ Google Drive */}
       {previewDoc && (
         <DocumentPreviewModal
           fileId={previewDoc}

@@ -1,0 +1,111 @@
+{
+  "name": "ATTECH - API: Document Upload & Supabase Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "document-upload",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-upload",
+      "name": "Webhook (Từ Web Next.js)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        -336,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $('Webhook (Từ Web Next.js)').item.json.body.title ? ($('Webhook (Từ Web Next.js)').item.json.body.title + '.' + ($binary.file.fileExtension || 'pdf')) : $binary.file.fileName }}",
+        "inputDataFieldName": "file",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ ({'VB_PHAP_LUAT':'1qapYCIZo4HskuqxmShw-8CJnhkJXFl0O','QL_KY_THUAT':'10pCwkwU1SFkGmiTV2aF8TtAOuI1U0DO2','SMS':'1Ejjrnarjq9X_skDDBaBLP0d_CJEypGYA','PCCC_CHCN':'1-49MpPr7Ba97RLQpqdFeBPKhcUjeJbtU','PCTT_TKCN':'1zKKEIscwObvyJqhqmbbBbMnyC_1sSJGV','ATVSLD':'1r0U79UySLEjKCXZHCs0Ullhi3BV28L-J','CONG_TRINH_HK':'1Qvu0nqEqlNxlyuhGSPa1WuLXaRzeBD7y'})[$('Webhook (Từ Web Next.js)').item.json.body.scope_domain] || '18Mb4S3_nS5mE4zGFxyWYQbFNavJJ9nlj' }}"
+        },
+        "options": {}
+      },
+      "id": "gdrive-upload",
+      "name": "Tải lên Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -112,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO document_files (\n  file_name,\n  drive_file_id,\n  drive_view_url,\n  drive_download_url,\n  department_access,\n  document_code,\n  issuing_authority,\n  issue_date,\n  sync_status\n) VALUES (\n  '{{ $('Webhook (Từ Web Next.js)').item.json.body.title || $binary.file.fileName }}',\n  '{{ $json.id }}',\n  '{{ $json.webViewLink }}',\n  '{{ $json.webContentLink }}',\n  ARRAY['{{ $('Webhook (Từ Web Next.js)').item.json.body.scope_domain || 'QL_KY_THUAT' }}'],\n  '{{ $('Webhook (Từ Web Next.js)').item.json.body.document_code || '' }}',\n  '{{ $('Webhook (Từ Web Next.js)').item.json.body.issuing_authority || '' }}',\n  {{ $('Webhook (Từ Web Next.js)').item.json.body.issue_date ? \"'\" + $('Webhook (Từ Web Next.js)').item.json.body.issue_date + \"'\" : \"NULL\" }},\n  'synced'\n) RETURNING id, file_name, drive_file_id, drive_view_url, issue_date;",
+        "options": {}
+      },
+      "id": "pg-insert",
+      "name": "Execute a SQL query",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        128,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, file: $json } }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Phản hồi kết quả về Web",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        336,
+        16
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (Từ Web Next.js)": {
+      "main": [
+        [
+          {
+            "node": "Tải lên Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tải lên Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Phản hồi kết quả về Web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

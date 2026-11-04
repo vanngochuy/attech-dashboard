@@ -1,0 +1,215 @@
+{
+  "name": "ATTECH - Scheduled & Manual Drive Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "1. Lập lịch mỗi đêm (00:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sync-drive-health",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-manual-sync",
+      "name": "2. Webhook (Admin bấm Quét trên Web)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        200,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, file_name, drive_file_id FROM document_files WHERE drive_file_id IS NOT NULL LIMIT 500;"
+      },
+      "id": "pg-get-files",
+      "name": "Lấy danh sách file (Supabase)1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        450,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.drive_file_id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "gdrive-check",
+      "name": "Kiểm tra file trên Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "onError": "continueRegularOutput",
+      "position": [
+        680,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-error",
+              "leftValue": "={{ $json.error !== undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-error",
+      "name": "File đã bị xóa hoặc lỗi 404?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        900,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE document_files\nSET sync_status = 'missing_on_drive'\nWHERE id = '{{ $('Lấy danh sách file (Supabase)1').item.json.id }}';\n",
+        "options": {}
+      },
+      "id": "pg-mark-warning",
+      "name": "Đánh dấu Cảnh báo (Supabase)1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, message: 'Hoàn tất quét đối soát toàn vẹn file Google Drive và Supabase' } }}",
+        "options": {}
+      },
+      "id": "respond-sync",
+      "name": "Phản hồi kết quả về Web",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        380
+      ]
+    }
+  ],
+  "connections": {
+    "1. Lập lịch mỗi đêm (00:00)": {
+      "main": [
+        [
+          {
+            "node": "Lấy danh sách file (Supabase)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Webhook (Admin bấm Quét trên Web)": {
+      "main": [
+        [
+          {
+            "node": "Lấy danh sách file (Supabase)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy danh sách file (Supabase)1": {
+      "main": [
+        [
+          {
+            "node": "Kiểm tra file trên Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kiểm tra file trên Google Drive": {
+      "main": [
+        [
+          {
+            "node": "File đã bị xóa hoặc lỗi 404?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File đã bị xóa hoặc lỗi 404?1": {
+      "main": [
+        [
+          {
+            "node": "Đánh dấu Cảnh báo (Supabase)1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Phản hồi kết quả về Web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đánh dấu Cảnh báo (Supabase)1": {
+      "main": [
+        [
+          {
+            "node": "Phản hồi kết quả về Web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
