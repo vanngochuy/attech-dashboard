@@ -16,3 +16,133 @@ body {
     scrollbar-width: none;
   }
 }
+
+/* ==========================================================================
+   CHỦ ĐỀ DEEP AERO & GLASSMORPHISM
+   ========================================================================== */
+
+/* Khung nền chính Deep Aero */
+.deep-aero-bg {
+  position: relative;
+  background: linear-gradient(135deg, #071324 0%, #0B223E 45%, #123B6D 85%, #1A4F8B 100%) !important;
+  overflow: hidden;
+}
+
+/* Quầng sáng khí quyển phía trên Header (tạo chiều sâu thay cho mây) */
+.deep-aero-bg::before {
+  content: "";
+  position: absolute;
+  top: -120px;
+  left: 28%;
+  width: 550px;
+  height: 280px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(14, 165, 233, 0.05) 55%, transparent 75%);
+  filter: blur(45px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Đường cong ánh sáng khí quyển ở góc dưới Sidebar */
+.deep-aero-bg::after {
+  content: "";
+  position: absolute;
+  bottom: -80px;
+  left: -100px;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, rgba(2, 132, 199, 0.04) 60%, transparent 75%);
+  border: 1px solid rgba(125, 211, 252, 0.15);
+  box-shadow: inset 0 0 40px rgba(56, 189, 248, 0.12);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Nút Sidebar ở trạng thái bình thường (Deep Aero) */
+.sidebar-nav-item-deep-aero {
+  background: rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  transition: all 0.25s ease !important;
+}
+
+.sidebar-nav-item-deep-aero:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(125, 211, 252, 0.35) !important;
+  color: #FFFFFF !important;
+  transform: translateX(2px) !important;
+}
+
+/* Nút Sidebar đang được chọn (Active - Deep Aero) */
+.sidebar-nav-item-deep-aero.active {
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.32) 0%, rgba(255, 255, 255, 0.12) 100%) !important;
+  border: 1px solid rgba(125, 211, 252, 0.55) !important;
+  box-shadow: 0 4px 20px rgba(2, 132, 199, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.25) !important;
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+}
+
+/* Các tab lọc chưa chọn & nút công cụ trên Header (Deep Aero) */
+.glass-pill-deep-aero {
+  background: rgba(15, 35, 65, 0.55) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 9999px !important;
+  color: #E2E8F0 !important;
+  transition: all 0.2s ease !important;
+}
+
+.glass-pill-deep-aero:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(186, 230, 253, 0.45) !important;
+  color: #FFFFFF !important;
+}
+
+/* Tab lọc đang chọn (Deep Aero) */
+.glass-pill-deep-aero.active {
+  background: #FFFFFF !important;
+  color: #0B223E !important;
+  border-color: #FFFFFF !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18) !important;
+  font-weight: 600 !important;
+}
+
+/* Huy hiệu số lượng (Badge) bên trong tab (Deep Aero) */
+.glass-pill-deep-aero .pill-badge {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #F8FAFC !important;
+  border-radius: 9999px !important;
+  padding: 2px 8px !important;
+  font-size: 0.75rem !important;
+}
+
+.glass-pill-deep-aero.active .pill-badge {
+  background: #E0F2FE !important;
+  color: #0369A1 !important;
+}
+
+/* Khung thông tin User ở góc dưới Sidebar (Deep Aero) */
+.user-profile-card-deep-aero {
+  background: rgba(7, 19, 36, 0.65) !important;
+  backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 14px !important;
+  color: #F8FAFC !important;
+}
+
+.user-profile-card-deep-aero .logout-btn {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  color: #FCA5A5 !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+.user-profile-card-deep-aero .logout-btn:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+  color: #FFFFFF !important;
+}

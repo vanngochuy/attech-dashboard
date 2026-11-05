@@ -46,6 +46,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { abbreviateIssuer } from '@/lib/issuer';
 import { useAssistant } from '@/components/assistant-context';
 import { useAuth } from '@/components/auth-context';
+import { useTheme } from '@/components/theme-context';
 
 // Danh mục Chuyên môn
 const DEPARTMENTS = [
@@ -85,6 +86,7 @@ function DocumentsContent() {
   const searchParams = useSearchParams();
   const { setDocsContext, selectedDocIds, selectAndAskDoc } = useAssistant();
   const { isAdmin } = useAuth();
+  const { isDeepAero } = useTheme();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<any | null>(null);
   const [previewDoc, setPreviewDoc] = useState<string | null>(null);
@@ -337,35 +339,43 @@ function DocumentsContent() {
         }
       `}</style>
 
-      {/* Khối Tiêu đề & Thanh Chuyên môn: Nền Xanh Bầu Trời & Mây Trắng */}
-      <div className="relative bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8] border-b border-sky-300 shadow-sm shrink-0 overflow-hidden z-20">
-        {/* Các đám mây trắng bồng bềnh trang trí trên nền bầu trời */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
-          <svg
-            viewBox="0 0 220 80"
-            className="absolute -top-3 left-16 w-48 text-white/25 fill-current"
-            style={{ animation: 'driftCloudHeader1 14s ease-in-out infinite' }}
-          >
-            <path d="M40 65 H180 A18 18 0 0 0 180 30 A24 24 0 0 0 135 14 A30 30 0 0 0 75 20 A22 22 0 0 0 40 65 Z" />
-          </svg>
-          <svg
-            viewBox="0 0 240 80"
-            className="absolute top-2 left-[38%] w-56 text-white/30 fill-current"
-            style={{ animation: 'driftCloudHeader2 18s ease-in-out infinite' }}
-          >
-            <path d="M35 65 H195 A20 20 0 0 0 195 28 A26 26 0 0 0 148 12 A32 32 0 0 0 82 18 A24 24 0 0 0 35 65 Z" />
-          </svg>
-          <svg
-            viewBox="0 0 200 80"
-            className="absolute -bottom-4 right-24 w-52 text-white/25 fill-current"
-            style={{ animation: 'driftCloudHeader1 16s ease-in-out infinite' }}
-          >
-            <path d="M45 65 H165 A20 20 0 0 0 165 25 A22 22 0 0 0 125 12 A30 30 0 0 0 68 20 A24 24 0 0 0 45 65 Z" />
-          </svg>
-        </div>
+      {/* Khối Tiêu đề & Thanh Chuyên môn: Hỗ trợ linh hoạt 2 chủ đề: Sky Cloud (mặc định) & Deep Aero (Khí quyển sâu) */}
+      <div
+        className={`relative border-b shadow-sm shrink-0 overflow-hidden z-20 ${
+          isDeepAero
+            ? 'deep-aero-bg border-sky-950'
+            : 'bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8] border-sky-300'
+        }`}
+      >
+        {/* Các đám mây trắng bồng bềnh trang trí trên nền bầu trời (Chỉ hiện khi ở chủ đề Sky Cloud) */}
+        {!isDeepAero && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
+            <svg
+              viewBox="0 0 220 80"
+              className="absolute -top-3 left-16 w-48 text-white/25 fill-current"
+              style={{ animation: 'driftCloudHeader1 14s ease-in-out infinite' }}
+            >
+              <path d="M40 65 H180 A18 18 0 0 0 180 30 A24 24 0 0 0 135 14 A30 30 0 0 0 75 20 A22 22 0 0 0 40 65 Z" />
+            </svg>
+            <svg
+              viewBox="0 0 240 80"
+              className="absolute top-2 left-[38%] w-56 text-white/30 fill-current"
+              style={{ animation: 'driftCloudHeader2 18s ease-in-out infinite' }}
+            >
+              <path d="M35 65 H195 A20 20 0 0 0 195 28 A26 26 0 0 0 148 12 A32 32 0 0 0 82 18 A24 24 0 0 0 35 65 Z" />
+            </svg>
+            <svg
+              viewBox="0 0 200 80"
+              className="absolute -bottom-4 right-24 w-52 text-white/25 fill-current"
+              style={{ animation: 'driftCloudHeader1 16s ease-in-out infinite' }}
+            >
+              <path d="M45 65 H165 A20 20 0 0 0 165 25 A22 22 0 0 0 125 12 A30 30 0 0 0 68 20 A24 24 0 0 0 45 65 Z" />
+            </svg>
+          </div>
+        )}
 
         {/* Top Bar Header */}
-        <header className="h-14 border-b border-white/20 flex items-center justify-between px-6 relative z-10">
+        <header className={`h-14 border-b flex items-center justify-between px-6 relative z-10 ${isDeepAero ? 'border-white/10' : 'border-white/20'}`}>
           <div className="hidden sm:flex items-center gap-2 text-white font-bold text-sm drop-shadow-2xs">
             <Cloud className="w-4 h-4 text-white fill-white/80" />
             <span>Kho Văn bản &amp; Tài liệu Nghiệp vụ</span>
@@ -375,12 +385,18 @@ function DocumentsContent() {
           <div className="flex items-center gap-2.5 ml-auto">
             {/* Trạng thái Google Drive dạng mờ Glassmorphism (bỏ Supabase Ready) */}
             <div className="hidden lg:flex items-center mr-1">
-              <div className="flex items-center gap-1.5 bg-white/40 backdrop-blur-[35px] px-2.5 py-1.5 rounded-lg border border-white/60 text-xs shadow-xs">
-                <span className="p-0.5 rounded bg-white/50 border border-white/60 text-sky-700">
+              <div
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs shadow-xs transition-all ${
+                  isDeepAero
+                    ? 'glass-pill-deep-aero'
+                    : 'bg-white/40 backdrop-blur-[35px] border border-white/60 text-[#0f2043]'
+                }`}
+              >
+                <span className={`p-0.5 rounded ${isDeepAero ? 'bg-sky-500/20 text-sky-300' : 'bg-white/50 border border-white/60 text-sky-700'}`}>
                   <Cloud className="w-3.5 h-3.5" />
                 </span>
-                <span className="text-[#0f2043] font-semibold">Drive:</span>
-                <span className="text-emerald-700 font-bold font-mono">Synced</span>
+                <span className={`font-semibold ${isDeepAero ? 'text-slate-200' : 'text-[#0f2043]'}`}>Drive:</span>
+                <span className="text-emerald-400 font-bold font-mono">Synced</span>
               </div>
             </div>
 
@@ -389,10 +405,14 @@ function DocumentsContent() {
               <button
                 onClick={handleScanDrive}
                 disabled={isScanningDrive}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] rounded-lg text-xs font-semibold transition-all backdrop-blur-[35px] shadow-xs disabled:opacity-50 cursor-pointer"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs disabled:opacity-50 cursor-pointer ${
+                  isDeepAero
+                    ? 'glass-pill-deep-aero'
+                    : 'bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] backdrop-blur-[35px]'
+                }`}
                 title="Admin: Kích hoạt n8n quét và kiểm tra sự tồn tại của toàn bộ file trên Google Drive"
               >
-                <span className="p-0.5 rounded bg-white/50 border border-white/60 text-amber-700">
+                <span className={`p-0.5 rounded ${isDeepAero ? 'bg-amber-400/20 text-amber-300' : 'bg-white/50 border border-white/60 text-amber-700'}`}>
                   {isScanningDrive ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
@@ -407,14 +427,18 @@ function DocumentsContent() {
             <button
               onClick={fetchDocuments}
               disabled={isLoading}
-              className="p-2 bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] rounded-lg transition-colors backdrop-blur-[35px] shadow-xs disabled:opacity-50 cursor-pointer"
+              className={`p-2 rounded-lg transition-colors shadow-xs disabled:opacity-50 cursor-pointer ${
+                isDeepAero
+                  ? 'glass-pill-deep-aero'
+                  : 'bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] backdrop-blur-[35px]'
+              }`}
               title="Làm mới danh sách"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
 
             {/* View toggle */}
-            <div className="flex items-center p-0.5 bg-sky-900/20 backdrop-blur-xs border border-white/30 rounded-lg">
+            <div className={`flex items-center p-0.5 backdrop-blur-xs rounded-lg border ${isDeepAero ? 'bg-sky-950/40 border-white/15' : 'bg-sky-900/20 border-white/30'}`}>
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-white/85 hover:text-white'
@@ -437,7 +461,11 @@ function DocumentsContent() {
             {isAdmin && (
               <button
                 onClick={() => setIsUploadModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1b3252] hover:bg-slate-900 active:scale-95 text-white border border-white/25 rounded-lg text-xs font-semibold transition-all shadow-md cursor-pointer"
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 active:scale-95 text-white rounded-lg text-xs font-semibold transition-all shadow-md cursor-pointer ${
+                  isDeepAero
+                    ? 'bg-sky-600 hover:bg-sky-500 border border-sky-400/40 shadow-sky-900/50'
+                    : 'bg-[#1b3252] hover:bg-slate-900 border border-white/25'
+                }`}
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Thêm tài liệu</span>
@@ -447,8 +475,12 @@ function DocumentsContent() {
           </div>
         </header>
 
-        {/* Sub-header / Filter Pills Bar (Dạng mờ Glassmorphism trên nền bầu trời mây trắng) */}
-        <div className="px-6 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar relative z-10 bg-white/20 backdrop-blur-[35px] border-t border-white/40">
+        {/* Sub-header / Filter Pills Bar (Dạng mờ Glassmorphism) */}
+        <div className={`px-6 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar relative z-10 border-t ${
+          isDeepAero
+            ? 'bg-black/20 backdrop-blur-[20px] border-white/10'
+            : 'bg-white/20 backdrop-blur-[35px] border-white/40'
+        }`}>
           {/* Department Pills */}
           <div className="flex items-center gap-2">
             {DEPARTMENTS.map((dept) => {
@@ -462,27 +494,37 @@ function DocumentsContent() {
                     setActiveFilter(dept.id);
                     setFilterMissingOnly(false);
                   }}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs transition-all shrink-0 cursor-pointer font-semibold ${
-                    isActive
-                      ? 'bg-white/95 text-[#0f2043] font-bold shadow-md border border-white'
-                      : 'bg-white/40 hover:bg-white/55 text-[#0f2043] font-semibold border border-white/60 hover:border-white/80 backdrop-blur-[35px] shadow-xs'
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs transition-all shrink-0 cursor-pointer font-semibold ${
+                    isDeepAero
+                      ? isActive
+                        ? 'glass-pill-deep-aero active'
+                        : 'glass-pill-deep-aero'
+                      : isActive
+                        ? 'bg-white/95 text-[#0f2043] font-bold shadow-md border border-white'
+                        : 'bg-white/40 hover:bg-white/55 text-[#0f2043] font-semibold border border-white/60 hover:border-white/80 backdrop-blur-[35px] shadow-xs'
                   }`}
                 >
                   <span
-                    className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                      isActive
-                        ? 'bg-sky-600 text-white shadow-2xs'
-                        : 'bg-white/50 backdrop-blur-[35px] border border-white/70 text-[#0f2043] shadow-2xs'
+                    className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                      isDeepAero
+                        ? isActive
+                          ? 'bg-sky-600 text-white'
+                          : 'bg-white/15 text-sky-200'
+                        : isActive
+                          ? 'bg-sky-600 text-white shadow-2xs'
+                          : 'bg-white/50 backdrop-blur-[35px] border border-white/70 text-[#0f2043] shadow-2xs'
                     }`}
                   >
                     <DeptIcon className="w-3 h-3" />
                   </span>
-                  <span className="text-[#0f2043]">{dept.label}</span>
+                  <span>{dept.label}</span>
                   <span
-                    className={`text-[11px] font-mono px-1.5 py-0.2 rounded-full transition-colors ${
-                      isActive
-                        ? 'bg-sky-100 text-sky-800 font-bold border border-sky-200'
-                        : 'bg-white/50 text-[#0f2043] font-bold border border-white/60'
+                    className={`pill-badge text-[11px] font-mono px-1.5 py-0.2 rounded-full transition-colors ${
+                      isDeepAero
+                        ? ''
+                        : isActive
+                          ? 'bg-sky-100 text-sky-800 font-bold border border-sky-200'
+                          : 'bg-white/50 text-[#0f2043] font-bold border border-white/60'
                     }`}
                   >
                     {count}

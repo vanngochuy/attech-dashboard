@@ -19,6 +19,7 @@ import {
   Database,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth-context';
+import { useTheme } from '@/components/theme-context';
 import {
   StaffTrainingRecord,
   CertificateRow,
@@ -30,6 +31,7 @@ import {
 
 export default function TrainingRecordsPage() {
   const { isAdmin } = useAuth();
+  const { isDeepAero } = useTheme();
   const [records, setRecords] = useState<StaffTrainingRecord[]>(DEFAULT_TRAINING_RECORDS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -347,54 +349,72 @@ export default function TrainingRecordsPage() {
         onChange={handleQuickUploadChange}
       />
 
-      {/* Khối Tiêu đề: Nền Xanh Bầu Trời & Mây Trắng (Đồng bộ với tab Tài liệu) */}
-      <div className="relative bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8] border-b border-sky-300 shadow-sm shrink-0 overflow-hidden z-20">
-        <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
-          <svg
-            viewBox="0 0 220 80"
-            className="absolute -top-3 left-16 w-48 text-white/25 fill-current"
-            style={{ animation: 'driftCloudHeader1 14s ease-in-out infinite' }}
-          >
-            <path d="M40 65 H180 A18 18 0 0 0 180 30 A24 24 0 0 0 135 14 A30 30 0 0 0 75 20 A22 22 0 0 0 40 65 Z" />
-          </svg>
-          <svg
-            viewBox="0 0 240 80"
-            className="absolute top-1 left-[42%] w-52 text-white/30 fill-current"
-            style={{ animation: 'driftCloudHeader2 18s ease-in-out infinite' }}
-          >
-            <path d="M35 65 H195 A20 20 0 0 0 195 28 A26 26 0 0 0 148 12 A32 32 0 0 0 82 18 A24 24 0 0 0 35 65 Z" />
-          </svg>
-          <svg
-            viewBox="0 0 200 80"
-            className="absolute -bottom-4 right-24 w-48 text-white/25 fill-current"
-            style={{ animation: 'driftCloudHeader1 16s ease-in-out infinite' }}
-          >
-            <path d="M45 65 H165 A20 20 0 0 0 165 25 A22 22 0 0 0 125 12 A30 30 0 0 0 68 20 A24 24 0 0 0 45 65 Z" />
-          </svg>
-        </div>
+      {/* Khối Tiêu đề: Hỗ trợ linh hoạt 2 chủ đề: Sky Cloud (mặc định) & Deep Aero */}
+      <div
+        className={`relative border-b shadow-sm shrink-0 overflow-hidden z-20 ${
+          isDeepAero
+            ? 'deep-aero-bg border-sky-950'
+            : 'bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8] border-sky-300'
+        }`}
+      >
+        {!isDeepAero && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
+            <svg
+              viewBox="0 0 220 80"
+              className="absolute -top-3 left-16 w-48 text-white/25 fill-current"
+              style={{ animation: 'driftCloudHeader1 14s ease-in-out infinite' }}
+            >
+              <path d="M40 65 H180 A18 18 0 0 0 180 30 A24 24 0 0 0 135 14 A30 30 0 0 0 75 20 A22 22 0 0 0 40 65 Z" />
+            </svg>
+            <svg
+              viewBox="0 0 240 80"
+              className="absolute top-1 left-[42%] w-52 text-white/30 fill-current"
+              style={{ animation: 'driftCloudHeader2 18s ease-in-out infinite' }}
+            >
+              <path d="M35 65 H195 A20 20 0 0 0 195 28 A26 26 0 0 0 148 12 A32 32 0 0 0 82 18 A24 24 0 0 0 35 65 Z" />
+            </svg>
+            <svg
+              viewBox="0 0 200 80"
+              className="absolute -bottom-4 right-24 w-48 text-white/25 fill-current"
+              style={{ animation: 'driftCloudHeader1 16s ease-in-out infinite' }}
+            >
+              <path d="M45 65 H165 A20 20 0 0 0 165 25 A22 22 0 0 0 125 12 A30 30 0 0 0 68 20 A24 24 0 0 0 45 65 Z" />
+            </svg>
+          </div>
+        )}
 
-        <header className="h-14 flex items-center justify-between px-6 relative z-10">
+        <header className={`h-14 flex items-center justify-between px-6 relative z-10 ${isDeepAero ? 'border-b border-white/10' : ''}`}>
           <div className="flex items-center gap-2 text-white font-bold text-sm drop-shadow-2xs">
             <GraduationCap className="w-4 h-4 text-white" />
             <span>Hồ sơ Huấn luyện &amp; Chứng chỉ Nghiệp vụ</span>
           </div>
 
           <div className="flex items-center gap-2.5 ml-auto">
-            <div className="hidden md:flex items-center gap-1.5 bg-white/40 backdrop-blur-[35px] px-2.5 py-1.5 rounded-lg border border-white/60 text-xs text-[#0f2043] shadow-xs">
-              <span className="p-0.5 rounded bg-white/50 border border-white/60 text-sky-700">
+            <div
+              className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs shadow-xs border ${
+                isDeepAero
+                  ? 'glass-pill-deep-aero'
+                  : 'bg-white/40 backdrop-blur-[35px] border-white/60 text-[#0f2043]'
+              }`}
+            >
+              <span className={`p-0.5 rounded ${isDeepAero ? 'bg-sky-500/20 text-sky-300' : 'bg-white/50 border border-white/60 text-sky-700'}`}>
                 <Upload className="w-3.5 h-3.5" />
               </span>
-              <span className="text-[#0f2043] font-semibold">Drive:</span>
-              <span className="text-[#0f2043] font-bold font-mono">01_CHỨNG CHỈ</span>
+              <span className={`font-semibold ${isDeepAero ? 'text-slate-200' : 'text-[#0f2043]'}`}>Drive:</span>
+              <span className={`font-bold font-mono ${isDeepAero ? 'text-sky-300' : 'text-[#0f2043]'}`}>01_CHỨNG CHỈ</span>
             </div>
 
             <button
               onClick={fetchTrainingRecords}
               disabled={isLoading}
-              className="p-2 bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] rounded-lg transition-colors backdrop-blur-[35px] shadow-xs disabled:opacity-50 cursor-pointer"
+              className={`p-2 rounded-lg transition-colors shadow-xs disabled:opacity-50 cursor-pointer border ${
+                isDeepAero
+                  ? 'glass-pill-deep-aero'
+                  : 'bg-white/40 hover:bg-white/55 border-white/60 hover:border-white/80 text-[#0f2043] backdrop-blur-[35px]'
+              }`}
               title="Làm mới danh sách"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isDeepAero ? 'text-sky-300' : 'text-slate-700'} ${isLoading ? 'animate-spin' : ''}`} />
             </button>
 
             {isAdmin && (
