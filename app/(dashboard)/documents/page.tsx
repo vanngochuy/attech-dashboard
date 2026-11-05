@@ -36,7 +36,8 @@ import {
   Calendar,
   History,
   Ban,
-  Bot
+  Bot,
+  X
 } from 'lucide-react';
 import UploadDocumentModal from '@/components/upload-document-modal';
 import EditDocumentModal from '@/components/edit-document-modal';
@@ -57,6 +58,19 @@ const DEPARTMENTS = [
   { id: 'ATVSLD', label: 'An toàn VSLĐ', dot: 'bg-amber-500', icon: HardHat },
   { id: 'CONG_TRINH_HK', label: 'Công trình Hàng không', dot: 'bg-purple-500', icon: Building2 },
 ];
+
+// Hàm bỏ dấu tiếng Việt & ký tự đặc biệt để hỗ trợ tìm kiếm từ khóa thông minh (không cần gõ đúng nguyên văn)
+function normalizeSearchText(str: string | null | undefined): string {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[-_./,()[\]{}:;+]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 export default function DocumentsPage() {
   return (
@@ -84,6 +98,8 @@ function DocumentsContent() {
     [router]
   );
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUPERSEDED'>('ALL');
+  const [issuerFilter, setIssuerFilter] = useState<string>('ALL');
+  const [yearFilter, setYearFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [filterMissingOnly, setFilterMissingOnly] = useState(false);
@@ -143,29 +159,94 @@ function DocumentsContent() {
     return map;
   }, [documents]);
 
-  // Bộ lọc tìm kiếm real-time: tìm theo Tên, Số hiệu văn bản, Đơn vị ban hành, Ngày & Trạng thái hiệu lực
+  // Danh sách Đơn vị ban hành (đã chuẩn hóa tên viết tắt) kèm số lượng văn bản
+  const issuerOptions = useMemo(() => {
+    const counts: Record<string, number> = {};
+    documents.forEach((doc) => {
+      const raw = (doc.issuing_authority || '').trim();
+      if (!raw) return;
+      const shortName = abbreviateIssuer(raw);
+      counts[shortName] = (counts[shortName] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, count]) => ({ label, count }));
+  }, [documents]);
+
+  // Danh sách Năm ban hành kèm số lượng văn bản
+  const yearOptions = useMemo(() => {
+    const counts: Record<string, number> = {};
+    documents.forEach((doc) => {
+      if (!doc.issue_date) return;
+      const y = new Date(doc.issue_date).getFullYear();
+      if (!isNaN(y) && y > 1970 && y < 2100) {
+        const yStr = String(y);
+        counts[yStr] = (counts[yStr] || 0) + 1;
+      }
+    });
+    return Object.entries(counts)
+      .sort((a, b) => Number(b[0]) - Number(a[0]))
+      .map(([year, count]) => ({ year, count }));
+  }, [documents]);
+
+  // Bộ lọc tìm kiếm đa trường & đa từ khóa thông minh:
+  // Không cần gõ khớp nguyên chuỗi, chỉ cần gõ vài từ khóa rời rạc (VD: "mối nguy 2025", "alos attech 2026", "pccc vatm")
   const filteredDocuments = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
+    const queryTokens = normalizeSearchText(searchQuery)
+      .split(' ')
+      .filter((t) => t.length > 0);
+
     return documents.filter((doc) => {
+      // 1. Lọc theo Chuyên môn
       const matchesDept = activeFilter === 'ALL' || doc.department_access?.includes(activeFilter);
-      const matchName = doc.file_name?.toLowerCase().includes(q);
-      const matchCode = doc.document_code?.toLowerCase().includes(q);
-      const matchIssuer =
-        doc.issuing_authority?.toLowerCase().includes(q) ||
-        abbreviateIssuer(doc.issuing_authority).toLowerCase().includes(q);
-      const matchDate = doc.issue_date?.toLowerCase().includes(q);
-      const matchOcr = doc.ocr_content?.toLowerCase().includes(q);
-      const matchesSearch = !q || matchName || matchCode || matchIssuer || matchDate || matchOcr;
+      if (!matchesDept) return false;
+
+      // 2. Lọc theo Đơn vị ban hành
+      if (issuerFilter !== 'ALL') {
+        const docIssuerShort = abbreviateIssuer(doc.issuing_authority);
+        if (docIssuerShort !== issuerFilter) return false;
+      }
+
+      // 3. Lọc theo Năm ban hành
+      const docYear = doc.issue_date ? String(new Date(doc.issue_date).getFullYear()) : '';
+      if (yearFilter !== 'ALL' && docYear !== yearFilter) return false;
+
+      // 4. Lọc theo Trạng thái mất file & Hiệu lực
       const matchesMissing = filterMissingOnly ? doc.sync_status === 'missing_on_drive' : true;
+      if (!matchesMissing) return false;
+
       const matchesStatus =
         statusFilter === 'ALL'
           ? true
           : statusFilter === 'ACTIVE'
             ? doc.status !== 'SUPERSEDED'
             : doc.status === 'SUPERSEDED';
-      return matchesDept && matchesSearch && matchesMissing && matchesStatus;
+      if (!matchesStatus) return false;
+
+      // 5. Tìm kiếm đa từ khóa (Multi-keyword) trên các trường định danh văn bản:
+      // Tên văn bản + Số/Ký hiệu + Đơn vị ban hành (đầy đủ & viết tắt) + Ngày/Năm ban hành + Tên chuyên môn
+      if (queryTokens.length > 0) {
+        const deptCode = doc.department_access?.[0] || '';
+        const deptLabel = DEPARTMENTS.find((d) => d.id === deptCode)?.label || '';
+        const vnDate = doc.issue_date
+          ? new Date(doc.issue_date).toLocaleDateString('vi-VN')
+          : '';
+        const issuerShort = abbreviateIssuer(doc.issuing_authority);
+
+        const searchableComposite = normalizeSearchText(
+          `${doc.file_name || ''} ${doc.document_code || ''} ${doc.issuing_authority || ''} ${issuerShort} ${doc.issue_date || ''} ${vnDate} ${docYear} ${deptLabel}`
+        );
+
+        // Mọi từ khóa người dùng gõ vào đều phải xuất hiện trong thông tin văn bản
+        const allTokensMatched = queryTokens.every((token) =>
+          searchableComposite.includes(token)
+        );
+        if (!allTokensMatched) return false;
+      }
+
+      return true;
     });
-  }, [documents, searchQuery, filterMissingOnly, statusFilter, activeFilter]);
+  }, [documents, searchQuery, filterMissingOnly, statusFilter, activeFilter, issuerFilter, yearFilter]);
 
   // Chia sẻ danh sách đang lọc cho Trợ lý AI nổi
   useEffect(() => {
@@ -313,12 +394,23 @@ function DocumentsContent() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm theo tên, số hiệu (123/QĐ...), đơn vị..."
-                className="bg-white/95 focus:bg-white border border-white focus:border-sky-200 focus:ring-2 focus:ring-white/50 rounded-lg pl-8 pr-8 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all w-56 focus:w-72 shadow-sm"
+                placeholder="Từ khóa: tên + năm, số hiệu, đơn vị..."
+                className="bg-white/95 focus:bg-white border border-white focus:border-sky-200 focus:ring-2 focus:ring-white/50 rounded-lg pl-8 pr-14 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all w-60 sm:w-72 focus:w-80 shadow-sm"
               />
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
-                ⌘K
-              </span>
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 p-0.5 rounded"
+                  title="Xóa từ khóa tìm kiếm"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
+                  ⌘K
+                </span>
+              )}
             </div>
 
             {/* Admin Quét Drive Nhanh (Chỉ hiển thị cho Admin) */}
@@ -465,6 +557,168 @@ function DocumentsContent() {
         </div>
       )}
 
+      {/* Thanh Tìm kiếm & Lọc Đa Trường (Cố định phía trên danh sách) */}
+      {!isLoading && isDbConfigured && (
+        <div className="px-6 py-2.5 bg-white border-b border-slate-200 shadow-2xs shrink-0 z-20 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+          {/* Trái: Tiêu đề + Số lượng văn bản khớp */}
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-sky-600" />
+              <span>Danh sách văn bản</span>
+              <span className="text-xs font-mono font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
+                {filteredDocuments.length}/{documents.length}
+              </span>
+            </h3>
+
+            {(activeFilter !== 'ALL' ||
+              issuerFilter !== 'ALL' ||
+              yearFilter !== 'ALL' ||
+              statusFilter !== 'ALL' ||
+              searchQuery.trim() !== '' ||
+              filterMissingOnly) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveFilter('ALL');
+                  setIssuerFilter('ALL');
+                  setYearFilter('ALL');
+                  setStatusFilter('ALL');
+                  setSearchQuery('');
+                  setFilterMissingOnly(false);
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
+                title="Xóa toàn bộ điều kiện tìm kiếm và bộ lọc"
+              >
+                <X className="w-3 h-3" />
+                <span>Xóa bộ lọc</span>
+              </button>
+            )}
+          </div>
+
+          {/* Phải: Các trường lọc nâng cao (Từ khóa + Chuyên môn + Đơn vị ban hành + Năm ban hành + Hiệu lực) */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Ô tìm kiếm từ khóa trực tiếp (Hỗ trợ gõ tên + năm + đơn vị không cần đúng thứ tự) */}
+            <div className="relative min-w-[220px] sm:min-w-[260px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Gõ vài từ khóa (VD: an toàn 2025, alos attech)..."
+                className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-sky-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Trường lọc: Chuyên môn */}
+            <select
+              value={activeFilter}
+              onChange={(e) => {
+                setActiveFilter(e.target.value);
+                setFilterMissingOnly(false);
+              }}
+              aria-label="Lọc theo chuyên môn"
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium focus:outline-none focus:border-sky-500 transition-colors cursor-pointer ${
+                activeFilter !== 'ALL'
+                  ? 'bg-sky-50 border-sky-300 text-sky-900 font-semibold'
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-white'
+              }`}
+            >
+              {DEPARTMENTS.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.id === 'ALL'
+                    ? `Chuyên môn: Tất cả (${departmentCounts['ALL'] || 0})`
+                    : `${dept.label} (${departmentCounts[dept.id] || 0})`}
+                </option>
+              ))}
+            </select>
+
+            {/* Trường lọc: Đơn vị ban hành */}
+            <select
+              value={issuerFilter}
+              onChange={(e) => setIssuerFilter(e.target.value)}
+              aria-label="Lọc theo đơn vị ban hành"
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium focus:outline-none focus:border-sky-500 transition-colors cursor-pointer max-w-[190px] ${
+                issuerFilter !== 'ALL'
+                  ? 'bg-sky-50 border-sky-300 text-sky-900 font-semibold'
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-white'
+              }`}
+            >
+              <option value="ALL">Đơn vị ban hành: Tất cả</option>
+              {issuerOptions.map((opt) => (
+                <option key={opt.label} value={opt.label}>
+                  {opt.label} ({opt.count})
+                </option>
+              ))}
+            </select>
+
+            {/* Trường lọc: Năm ban hành */}
+            <select
+              value={yearFilter}
+              onChange={(e) => setYearFilter(e.target.value)}
+              aria-label="Lọc theo năm ban hành"
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium focus:outline-none focus:border-sky-500 transition-colors cursor-pointer ${
+                yearFilter !== 'ALL'
+                  ? 'bg-sky-50 border-sky-300 text-sky-900 font-semibold'
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-white'
+              }`}
+            >
+              <option value="ALL">Năm ban hành: Tất cả</option>
+              {yearOptions.map((opt) => (
+                <option key={opt.year} value={opt.year}>
+                  Năm {opt.year} ({opt.count})
+                </option>
+              ))}
+            </select>
+
+            {/* Trường lọc: Hiệu lực */}
+            <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('ALL')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                  statusFilter === 'ALL'
+                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Tất cả
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('ACTIVE')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${
+                  statusFilter === 'ACTIVE'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Còn hiệu lực
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('SUPERSEDED')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${
+                  statusFilter === 'SUPERSEDED'
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <History className="w-3 h-3 text-amber-600" /> Đã thay thế
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Document Content */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
@@ -488,56 +742,7 @@ function DocumentsContent() {
             </div>
           </div>
         ) : (
-          <div className="space-y-4 pb-12">
-            {/* Header Danh sách tệp & Bộ lọc trạng thái */}
-            <div className="px-6 pt-4 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-indigo-600" />
-                  <span>Danh sách văn bản</span>
-                  <span className="text-xs font-mono font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                    {filteredDocuments.length}
-                  </span>
-                </h3>
-                {activeFilter !== 'ALL' && (
-                  <span className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full font-medium">
-                    {activeDept.label}
-                  </span>
-                )}
-              </div>
-
-              {/* Status Filter Tabs */}
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs self-start sm:self-auto shadow-xs">
-                <button
-                  onClick={() => setStatusFilter('ALL')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${statusFilter === 'ALL'
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  Tất cả
-                </button>
-                <button
-                  onClick={() => setStatusFilter('ACTIVE')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${statusFilter === 'ACTIVE'
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" /> Còn hiệu lực
-                </button>
-                <button
-                  onClick={() => setStatusFilter('SUPERSEDED')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${statusFilter === 'SUPERSEDED'
-                      ? 'bg-amber-50 text-amber-700 border border-amber-200 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  <History className="w-3.5 h-3.5 text-amber-600" /> Đã thay thế
-                </button>
-              </div>
-            </div>
-
+          <div className="pb-12">
             {/* DANH SÁCH HOẶC LƯỚI KHUNG TÀI LIỆU */}
             {filteredDocuments.length === 0 ? (
               <div className="p-16 flex flex-col items-center justify-center text-center">
@@ -548,12 +753,15 @@ function DocumentsContent() {
                 <p className="text-slate-500 text-xs max-w-sm mb-4">
                   {filterMissingOnly
                     ? 'Không có tài liệu nào bị lỗi mất file Google Drive.'
-                    : 'Chưa có tài liệu nào trong lĩnh vực chuyên môn này. Nhấn nút "Thêm tài liệu" để tải văn bản mới vào hệ thống.'}
+                    : 'Không có văn bản nào khớp với từ khóa hoặc bộ lọc đã chọn. Hãy thử bớt từ khóa hoặc đặt lại bộ lọc.'}
                 </p>
                 <button
                   onClick={() => {
                     setActiveFilter('ALL');
+                    setIssuerFilter('ALL');
+                    setYearFilter('ALL');
                     setStatusFilter('ALL');
+                    setSearchQuery('');
                     setFilterMissingOnly(false);
                   }}
                   className="px-3.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium border border-slate-200 shadow-xs transition-colors"
@@ -562,11 +770,11 @@ function DocumentsContent() {
                 </button>
               </div>
             ) : viewMode === 'list' ? (
-              /* TABLE VIEW */
-              <div className="px-6">
-                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-                  {/* Table Header */}
-                  <div className="h-11 px-4 flex items-center justify-between bg-slate-100/80 text-xs font-semibold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+              /* TABLE VIEW (với phần Tiêu đề cột Freeze / Sticky khi cuộn xuống) */
+              <div className="px-6 pt-3">
+                <div className="border border-slate-200 rounded-xl bg-white shadow-xs">
+                  {/* Table Header - FREEZE (Sticky top-0) khi kéo xuống */}
+                  <div className="sticky top-0 z-20 h-11 px-4 flex items-center justify-between bg-slate-100/95 backdrop-blur-md text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 rounded-t-xl shadow-2xs">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <span className="flex-1">TÊN VĂN BẢN</span>
                     </div>
@@ -576,7 +784,7 @@ function DocumentsContent() {
                       <span className="w-28 text-center">NGÀY BAN HÀNH</span>
                       <span className="w-32 text-center hidden lg:inline">CHUYÊN MÔN</span>
                       <span className="w-28 text-center">HIỆU LỰC</span>
-                      <span className="w-20 text-right">THAO TÁC</span>
+                      <span className="w-24 text-right">THAO TÁC</span>
                     </div>
                   </div>
 
@@ -592,7 +800,7 @@ function DocumentsContent() {
                       return (
                         <div
                           key={doc.id}
-                          className={`h-14 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group cursor-pointer ${isMissingOnDrive
+                          className={`h-14 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group cursor-pointer last:rounded-b-xl ${isMissingOnDrive
                               ? 'bg-rose-50/30'
                               : isSuperseded
                                 ? 'bg-amber-50/20'
@@ -722,7 +930,7 @@ function DocumentsContent() {
               </div>
             ) : (
               /* GRID / CARD VIEW (Kiểu Thẻ Google Drive) */
-              <div className="px-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="px-6 pt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filteredDocuments.map((doc) => {
                   const deptCode = doc.department_access?.[0] || '';
                   const dept = getDeptConfig(deptCode);
