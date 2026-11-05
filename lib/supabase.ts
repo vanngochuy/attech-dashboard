@@ -1,8 +1,17 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * Làm sạch biến môi trường: tự động loại bỏ khoảng trắng và dấu ngoặc kép/đơn dư thừa
+ * (tránh lỗi khi copy-paste cả dấu "..." từ .env.local lên bảng cấu hình Vercel)
+ */
+export function cleanEnv(val?: string | null): string {
+  if (!val) return '';
+  return val.trim().replace(/^["']+|["']+$/g, '').trim();
+}
+
 export function isSupabaseConfigured(): boolean {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const key = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   if (!url || !key) return false;
   if (url === 'YOUR_SUPABASE_URL' || key === 'YOUR_SUPABASE_ANON_KEY') return false;
   if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
@@ -10,10 +19,18 @@ export function isSupabaseConfigured(): boolean {
 }
 
 export function isSupabaseAdminConfigured(): boolean {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
+  const key = cleanEnv(
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
   if (!url || !key) return false;
-  if (url === 'YOUR_SUPABASE_URL' || key === 'YOUR_SUPABASE_SERVICE_ROLE_KEY' || key === 'YOUR_SUPABASE_ANON_KEY') return false;
+  if (
+    url === 'YOUR_SUPABASE_URL' ||
+    key === 'YOUR_SUPABASE_SERVICE_ROLE_KEY' ||
+    key === 'YOUR_SUPABASE_ANON_KEY'
+  ) {
+    return false;
+  }
   if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
   return true;
 }
@@ -26,8 +43,8 @@ export function getSupabaseClient(): SupabaseClient | null {
   }
   if (!clientInstance) {
     clientInstance = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
+      cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
     );
   }
   return clientInstance;
@@ -37,8 +54,11 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
   if (!isSupabaseAdminConfigured()) {
     return null;
   }
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key);
+  const url = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
+  const key = cleanEnv(
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+  return createClient(url, key);
 }
 
 // Fallback dummy proxy so importing `supabase` directly never throws at module load time

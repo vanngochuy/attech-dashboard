@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { PDFDocument } from 'pdf-lib';
+import { cleanEnv } from '@/lib/supabase';
 
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = cleanEnv(process.env.GEMINI_API_KEY);
     if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY') {
       return NextResponse.json(
         { 

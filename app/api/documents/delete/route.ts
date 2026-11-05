@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase';
+import { getSupabaseAdminClient, isSupabaseAdminConfigured, cleanEnv } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
@@ -22,11 +22,12 @@ export async function POST(request: Request) {
 
     // 1. Gọi n8n webhook để kích hoạt lệnh xóa file gốc trên Google Drive (nếu có drive_file_id)
     if (drive_file_id) {
-      const n8nBaseUrl = process.env.N8N_WEBHOOK_URL
-        ? process.env.N8N_WEBHOOK_URL.replace('/document-upload', '/document-delete')
+      const rawWebhook = cleanEnv(process.env.N8N_WEBHOOK_URL);
+      const n8nBaseUrl = rawWebhook
+        ? rawWebhook.replace('/document-upload', '/document-delete')
         : 'http://localhost:5678/webhook/document-delete';
 
-      const n8nDeleteUrl = process.env.N8N_DELETE_WEBHOOK_URL || n8nBaseUrl;
+      const n8nDeleteUrl = cleanEnv(process.env.N8N_DELETE_WEBHOOK_URL) || n8nBaseUrl;
 
       try {
         console.log(`[Delete API] Gửi yêu cầu xóa file Drive ${drive_file_id} sang n8n: ${n8nDeleteUrl}`);
@@ -40,15 +41,12 @@ export async function POST(request: Request) {
         }
       } catch (n8nErr: any) {
         console.warn(`[Delete API] Không thể kết nối tới n8n để xóa file Drive:`, n8nErr.message);
-        // Không block việc xóa trong DB nếu n8n tạm thời chưa bật
       }
     }
 
     // 2. Xóa bản ghi trong Supabase
-    // Xóa trước trong document_embeddings nếu có
     await supabase.from('document_embeddings').delete().eq('document_id', id);
 
-    // Xóa trong document_files
     const { error: dbError } = await supabase
       .from('document_files')
       .delete()
@@ -64,9 +62,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: 'Đã xóa tài liệu khỏi hệ thống và kích hoạt lệnh xóa trên Google Drive.'
+      message: 'Đã xóa tài liệu khỏi hệ thống và kích hoạt lệnh xóa trên Google Drive.',
     });
-
   } catch (err: any) {
     console.error('[Delete API] Lỗi hệ thống:', err);
     return NextResponse.json(

@@ -87,29 +87,44 @@ function DocumentsContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [filterMissingOnly, setFilterMissingOnly] = useState(false);
+  const [isDbConfigured, setIsDbConfigured] = useState(true);
 
   // Trạng thái Quét trực tiếp Google Drive cho Admin
   const [isScanningDrive, setIsScanningDrive] = useState(false);
   const [scanNotification, setScanNotification] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Lấy dữ liệu Supabase
+  // Lấy dữ liệu Supabase (ưu tiên client, tự động fallback qua Server API /api/documents/list trên Vercel)
   const fetchDocuments = async () => {
-    if (!isSupabaseConfigured()) {
-      setIsLoading(false);
-      return;
-    }
     setIsLoading(true);
-    // Nạp toàn bộ tài liệu một lần; lọc chuyên môn thực hiện phía client để số đếm luôn đúng
-    let query = supabase.from('document_files').select('*').order('created_at', { ascending: false });
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('document_files')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-    const { data, error } = await query;
-    if (error) {
-      console.error('Lỗi nạp dữ liệu từ Supabase:', error);
-    } else if (data) {
-      setDocuments(data);
+        if (!error && data) {
+          setDocuments(data);
+          setIsDbConfigured(true);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Fallback qua Server API (đọc được biến môi trường runtime trên Vercel ngay cả khi không rebuild)
+      const res = await fetch('/api/documents/list', { cache: 'no-store' });
+      const payload = await res.json();
+      if (payload.configured) {
+        setDocuments(payload.documents || []);
+        setIsDbConfigured(true);
+      } else {
+        setIsDbConfigured(false);
+      }
+    } catch (err) {
+      console.error('Lỗi nạp dữ liệu từ Supabase:', err);
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -413,7 +428,7 @@ function DocumentsContent() {
             <div className="w-6 h-6 border-2 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin" />
             <span>Đang đồng bộ dữ liệu từ Supabase...</span>
           </div>
-        ) : !isSupabaseConfigured() ? (
+        ) : !isDbConfigured ? (
           <div className="p-16 flex flex-col items-center justify-center text-center max-w-lg mx-auto">
             <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-600 mb-4 shadow-sm">
               <AlertTriangle className="w-6 h-6" />

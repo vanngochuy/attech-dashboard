@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
+import { cleanEnv } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
-    const prodWebhookUrl = process.env.N8N_SYNC_WEBHOOK_URL || 'http://localhost:5678/webhook/sync-drive-health';
+    const rawWebhook = cleanEnv(process.env.N8N_WEBHOOK_URL);
+    const derivedSyncUrl = rawWebhook
+      ? rawWebhook.replace('/document-upload', '/sync-drive-health')
+      : 'http://localhost:5678/webhook/sync-drive-health';
+    const prodWebhookUrl = cleanEnv(process.env.N8N_SYNC_WEBHOOK_URL) || derivedSyncUrl;
     const testWebhookUrl = prodWebhookUrl.replace('/webhook/', '/webhook-test/');
     const fallbackWebhookUrl = 'http://localhost:5678/webhook/drive-sync-audit';
 

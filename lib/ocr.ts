@@ -1,4 +1,5 @@
 import { PDFDocument } from 'pdf-lib';
+import { cleanEnv } from '@/lib/supabase';
 
 const MAX_OCR_PAGES = 20;
 
@@ -12,7 +13,7 @@ export async function extractDocumentOcr(
   mimeType: string,
   fileName: string
 ): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = cleanEnv(process.env.GEMINI_API_KEY);
   if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY') {
     console.warn('[OCR] Chưa cấu hình GEMINI_API_KEY, bỏ qua OCR.');
     return null;

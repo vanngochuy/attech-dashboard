@@ -1,11 +1,8 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText } from 'ai';
-import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase';
+import { getSupabaseAdminClient, isSupabaseAdminConfigured, cleanEnv } from '@/lib/supabase';
 
 export const maxDuration = 30;
-
-// Dự án dùng biến GEMINI_API_KEY
-const google = createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const MAX_LIST_DOCS = 100;
 const MAX_SELECTED_DOCS = 2;
@@ -13,6 +10,7 @@ const MAX_OCR_CHARS_PER_DOC = 45000; // Giới hạn an toàn ~10k-12k token m�
 
 export async function POST(req: Request) {
   try {
+    const google = createGoogleGenerativeAI({ apiKey: cleanEnv(process.env.GEMINI_API_KEY) });
     const { messages, documents, scopeLabel, selectedDocIds } = await req.json();
 
     // 1. Cắt ngắn lịch sử hội thoại (Sliding Window: giữ tối đa 6 tin nhắn gần nhất để tiết kiệm Quota)

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase';
+import { getSupabaseAdminClient, isSupabaseAdminConfigured, cleanEnv } from '@/lib/supabase';
 import { extractDocumentOcr } from '@/lib/ocr';
 
 export const maxDuration = 60;
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const file = formData.get('file') as File | null;
     const title = (formData.get('title') as string | null)?.trim() || '';
 
-    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
+    const n8nWebhookUrl = cleanEnv(process.env.N8N_WEBHOOK_URL);
     if (!n8nWebhookUrl) {
       return NextResponse.json(
         { error: 'N8N_WEBHOOK_URL is not configured' },
