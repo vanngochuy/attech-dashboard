@@ -75,6 +75,95 @@ function normalizeSearchText(str: string | null | undefined): string {
     .trim();
 }
 
+// Chuyển đổi định dạng ngày sang YYYY-MM-DD cho input[type="date"]
+function toYMD(val?: string | null): string {
+  if (!val) return '';
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return '';
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  } catch {
+    return '';
+  }
+}
+
+type InlineField = 'document_code' | 'issuing_authority' | 'issue_date' | 'department_access';
+
+function InlineEditable({
+  docId,
+  field,
+  type = 'text',
+  displayNode,
+  currentValue,
+  activeEdit,
+  setActiveEdit,
+  onSave,
+  containerClassName = '',
+  inputClassName = '',
+  selectOptions,
+}: {
+  docId: string;
+  field: InlineField;
+  type?: 'text' | 'date' | 'select';
+  displayNode: React.ReactNode;
+  currentValue: string;
+  activeEdit: { docId: string; field: InlineField; value: string } | null;
+  setActiveEdit: (val: { docId: string; field: InlineField; value: string } | null) => void;
+  onSave: (docId: string, field: InlineField, value: string) => void;
+  containerClassName?: string;
+  inputClassName?: string;
+  selectOptions?: { id: string; label: string }[];
+}) {
+  const isEditing = activeEdit?.docId === docId && activeEdit?.field === field;
+
+  if (isEditing && activeEdit) {
+    return (
+      <div className={containerClassName} onClick={(e) => e.stopPropagation()}>
+        {type === 'select' ? (
+          <select
+            autoFocus
+            value={activeEdit.value}
+            onChange={(e) => {
+              const val = e.target.value;
+              setActiveEdit({ docId, field, value: val });
+              onSave(docId, field, val);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setActiveEdit(null);
+            }}
+            onBlur={() => onSave(docId, field, activeEdit.value)}
+            className={inputClassName}
+          >
+            {selectOptions?.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type={type}
+            autoFocus
+            value={activeEdit.value}
+            onChange={(e) => setActiveEdit({ docId, field, value: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSave(docId, field, activeEdit.value);
+              if (e.key === 'Escape') setActiveEdit(null);
+            }}
+            onBlur={() => onSave(docId, field, activeEdit.value)}
+            className={inputClassName}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return <>{displayNode}</>;
+}
+
 export default function DocumentsPage() {
   return (
     <Suspense fallback={null}>
@@ -112,6 +201,73 @@ function DocumentsContent() {
   // Trạng thái Quét trực tiếp Google Drive cho Admin
   const [isScanningDrive, setIsScanningDrive] = useState(false);
   const [scanNotification, setScanNotification] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Trạng thái Chỉnh sửa trực tiếp tại chỗ (Inline Edit) cho Admin
+  const [inlineEdit, setInlineEdit] = useState<{ docId: string; field: InlineField; value: string } | null>(null);
+  const [inlineSavingDocId, setInlineSavingDocId] = useState<string | null>(null);
+
+  const handleSaveInline = async (docId: string, field: InlineField, newValue: string) => {
+    const targetDoc = documents.find((d) => d.id === docId);
+    if (!targetDoc) {
+      setInlineEdit(null);
+      return;
+    }
+
+    const trimmed = newValue.trim();
+    const currentValue = field === 'department_access'
+      ? (targetDoc.department_access?.[0] || 'QL_KY_THUAT')
+      : (targetDoc[field] || '');
+
+    // Nếu không thay đổi thì đóng chế độ sửa
+    if (currentValue === trimmed) {
+      setInlineEdit(null);
+      return;
+    }
+
+    // 1. Cập nhật giao diện tức thì (Optimistic update)
+    setDocuments((prev) =>
+      prev.map((d) => {
+        if (d.id !== docId) return d;
+        if (field === 'department_access') {
+          return { ...d, department_access: [trimmed] };
+        }
+        return { ...d, [field]: trimmed };
+      })
+    );
+
+    setInlineEdit(null);
+    setInlineSavingDocId(docId);
+
+    // 2. Gửi API cập nhật cơ sở dữ liệu Supabase
+    try {
+      const payload: Record<string, any> = { id: docId };
+      if (field === 'department_access') {
+        payload.department_access = [trimmed];
+      } else {
+        payload[field] = trimmed;
+      }
+
+      const res = await fetch('/api/documents/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Cập nhật thất bại');
+      }
+    } catch (err: any) {
+      console.error('Lỗi lưu inline:', err);
+      // Rollback nếu có lỗi
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === docId ? targetDoc : d))
+      );
+      alert('Không thể lưu thay đổi: ' + (err.message || 'Lỗi mạng'));
+    } finally {
+      setInlineSavingDocId(null);
+    }
+  };
 
   // Lấy dữ liệu Supabase (ưu tiên client, tự động fallback qua Server API /api/documents/list trên Vercel)
   const fetchDocuments = async () => {
@@ -873,76 +1029,136 @@ function DocumentsContent() {
 
                           {/* Right Columns */}
                           <div className="flex items-center gap-4 shrink-0">
-                            {/* Số hiệu -> Không mở xem trước; Admin click vào để sửa */}
-                            <span
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isAdmin) setEditingDoc(doc);
-                              }}
-                              className={`w-28 text-left font-mono text-xs font-semibold truncate hidden sm:inline px-1 py-0.5 rounded ${
-                                isAdmin
-                                  ? 'cursor-pointer text-indigo-700 hover:bg-indigo-50 hover:underline'
-                                  : 'cursor-default text-indigo-700'
-                              }`}
-                              title={isAdmin ? 'Nhấn để chỉnh sửa Số/Ký hiệu (Admin)' : undefined}
-                            >
-                              {doc.document_code || '---'}
-                            </span>
+                            {/* Số hiệu -> Không mở xem trước; Admin click vào để sửa trực tiếp tại chỗ */}
+                            <InlineEditable
+                              docId={doc.id}
+                              field="document_code"
+                              type="text"
+                              currentValue={doc.document_code || ''}
+                              activeEdit={inlineEdit}
+                              setActiveEdit={setInlineEdit}
+                              onSave={handleSaveInline}
+                              containerClassName="w-28 shrink-0"
+                              inputClassName="w-full text-xs font-mono font-semibold px-1.5 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-indigo-900 shadow-xs"
+                              displayNode={
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isAdmin) {
+                                      setInlineEdit({ docId: doc.id, field: 'document_code', value: doc.document_code || '' });
+                                    }
+                                  }}
+                                  className={`w-28 text-left font-mono text-xs font-semibold truncate hidden sm:inline px-1.5 py-0.5 rounded transition-all ${
+                                    isAdmin
+                                      ? 'cursor-pointer text-indigo-700 hover:bg-sky-100/70 hover:shadow-2xs'
+                                      : 'cursor-default text-indigo-700'
+                                  }`}
+                                >
+                                  {doc.document_code || '---'}
+                                </span>
+                              }
+                            />
 
-                            {/* Đơn vị -> Không mở xem trước; Admin click vào để sửa */}
-                            <span
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isAdmin) setEditingDoc(doc);
-                              }}
-                              className={`w-28 text-left text-xs font-medium truncate hidden md:inline px-1 py-0.5 rounded ${
-                                isAdmin
-                                  ? 'cursor-pointer text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:underline'
-                                  : 'cursor-default text-slate-700'
-                              }`}
-                              title={isAdmin ? `Nhấn để chỉnh sửa Đơn vị ban hành: ${doc.issuing_authority || 'Chưa có'} (Admin)` : doc.issuing_authority || undefined}
-                            >
-                              {abbreviateIssuer(doc.issuing_authority)}
-                            </span>
+                            {/* Đơn vị -> Không mở xem trước; Admin click vào để sửa trực tiếp tại chỗ */}
+                            <InlineEditable
+                              docId={doc.id}
+                              field="issuing_authority"
+                              type="text"
+                              currentValue={doc.issuing_authority || ''}
+                              activeEdit={inlineEdit}
+                              setActiveEdit={setInlineEdit}
+                              onSave={handleSaveInline}
+                              containerClassName="w-28 shrink-0"
+                              inputClassName="w-full text-xs font-medium px-1.5 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-800 shadow-xs"
+                              displayNode={
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isAdmin) {
+                                      setInlineEdit({ docId: doc.id, field: 'issuing_authority', value: doc.issuing_authority || '' });
+                                    }
+                                  }}
+                                  className={`w-28 text-left text-xs font-medium truncate hidden md:inline px-1.5 py-0.5 rounded transition-all ${
+                                    isAdmin
+                                      ? 'cursor-pointer text-slate-700 hover:bg-sky-100/70 hover:shadow-2xs'
+                                      : 'cursor-default text-slate-700'
+                                  }`}
+                                >
+                                  {abbreviateIssuer(doc.issuing_authority)}
+                                </span>
+                              }
+                            />
 
-                            {/* Ngày ban hành -> Không mở xem trước; Admin click vào để sửa */}
-                            <span
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isAdmin) setEditingDoc(doc);
-                              }}
-                              className={`w-28 text-center font-mono text-xs font-medium px-1 py-0.5 rounded ${
-                                isAdmin
-                                  ? 'cursor-pointer text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 hover:underline'
-                                  : 'cursor-default text-slate-600'
-                              }`}
-                              title={isAdmin ? 'Nhấn để chỉnh sửa Ngày ban hành (Admin)' : undefined}
-                            >
-                              {doc.issue_date
-                                ? new Date(doc.issue_date).toLocaleDateString('vi-VN')
-                                : '---'}
-                            </span>
+                            {/* Ngày ban hành -> Không mở xem trước; Admin click vào để sửa trực tiếp tại chỗ */}
+                            <InlineEditable
+                              docId={doc.id}
+                              field="issue_date"
+                              type="date"
+                              currentValue={toYMD(doc.issue_date)}
+                              activeEdit={inlineEdit}
+                              setActiveEdit={setInlineEdit}
+                              onSave={handleSaveInline}
+                              containerClassName="w-28 shrink-0"
+                              inputClassName="w-full text-xs font-mono font-medium px-1 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-800 shadow-xs"
+                              displayNode={
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isAdmin) {
+                                      setInlineEdit({ docId: doc.id, field: 'issue_date', value: toYMD(doc.issue_date) });
+                                    }
+                                  }}
+                                  className={`w-28 text-center font-mono text-xs font-medium px-1.5 py-0.5 rounded transition-all ${
+                                    isAdmin
+                                      ? 'cursor-pointer text-slate-600 hover:bg-sky-100/70 hover:shadow-2xs'
+                                      : 'cursor-default text-slate-600'
+                                  }`}
+                                >
+                                  {doc.issue_date
+                                    ? new Date(doc.issue_date).toLocaleDateString('vi-VN')
+                                    : '---'}
+                                </span>
+                              }
+                            />
 
-                            {/* Chuyên môn (Rút gọn: QLKT, CTHK, CHK...) -> Không mở xem trước; Admin click vào để sửa */}
-                            <span
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isAdmin) setEditingDoc(doc);
-                              }}
-                              className={`w-32 text-center hidden lg:inline ${
-                                isAdmin ? 'cursor-pointer' : 'cursor-default'
-                              }`}
-                              title={isAdmin ? `Nhấn để chỉnh sửa Chuyên môn: ${dept.label} (Admin)` : `Chuyên môn: ${dept.label}`}
-                            >
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 transition-colors ${
-                                  isAdmin ? 'hover:border-indigo-300 hover:bg-indigo-50' : ''
-                                }`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
-                                <span className="truncate max-w-[100px]">{dept.shortLabel || dept.label}</span>
-                              </span>
-                            </span>
+                            {/* Chuyên môn (Rút gọn: QLKT, CTHK, CHK...) -> Không mở xem trước; Admin click vào để sửa trực tiếp tại chỗ */}
+                            <InlineEditable
+                              docId={doc.id}
+                              field="department_access"
+                              type="select"
+                              currentValue={doc.department_access?.[0] || 'QL_KY_THUAT'}
+                              activeEdit={inlineEdit}
+                              setActiveEdit={setInlineEdit}
+                              onSave={handleSaveInline}
+                              containerClassName="w-32 shrink-0 hidden lg:inline"
+                              inputClassName="w-full text-xs font-semibold px-1 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-800 shadow-xs"
+                              selectOptions={DEPARTMENTS.filter((d) => d.id !== 'all').map((d) => ({
+                                id: d.id,
+                                label: d.shortLabel || d.label,
+                              }))}
+                              displayNode={
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isAdmin) {
+                                      setInlineEdit({
+                                        docId: doc.id,
+                                        field: 'department_access',
+                                        value: doc.department_access?.[0] || 'QL_KY_THUAT',
+                                      });
+                                    }
+                                  }}
+                                  className={`w-32 text-center hidden lg:inline px-1 py-0.5 rounded transition-all ${
+                                    isAdmin ? 'cursor-pointer hover:bg-sky-100/70' : 'cursor-default'
+                                  }`}
+                                >
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
+                                    <span className="truncate max-w-[100px]">{dept.shortLabel || dept.label}</span>
+                                  </span>
+                                </span>
+                              }
+                            />
 
                             {/* Trạng thái hiệu lực */}
                             <span className="w-28 text-center">
@@ -1071,62 +1287,147 @@ function DocumentsContent() {
                         </div>
                       </div>
 
-                      {/* 2. Thân Khung: 4 trường thông tin chi tiết -> Admin nhấn vào để chỉnh sửa */}
-                      <div
-                        className={`p-3.5 space-y-2 bg-white flex-1 ${
-                          isAdmin ? 'cursor-pointer hover:bg-sky-50/40 transition-colors' : 'cursor-default'
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (isAdmin) setEditingDoc(doc);
-                        }}
-                        title={isAdmin ? 'Nhấn để chỉnh sửa thông tin văn bản (Admin)' : undefined}
-                      >
+                      {/* 2. Thân Khung: 4 trường thông tin chi tiết -> Admin nhấn vào từng trường để sửa trực tiếp tại chỗ */}
+                      <div className="p-3.5 space-y-2 bg-white flex-1">
                         {/* Số hiệu văn bản */}
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500 flex items-center gap-1.5 font-medium">
+                        <div className="flex items-center justify-between text-xs min-h-[26px]">
+                          <span className="text-slate-500 flex items-center gap-1.5 font-medium shrink-0">
                             <Hash className="w-3 h-3 text-slate-400" /> Số hiệu:
                           </span>
-                          <span className="font-mono font-semibold text-indigo-700 truncate max-w-[150px]">
-                            {doc.document_code || '---'}
-                          </span>
+                          <InlineEditable
+                            docId={doc.id}
+                            field="document_code"
+                            type="text"
+                            currentValue={doc.document_code || ''}
+                            activeEdit={inlineEdit}
+                            setActiveEdit={setInlineEdit}
+                            onSave={handleSaveInline}
+                            containerClassName="shrink-0"
+                            inputClassName="w-36 text-xs font-mono font-semibold px-1 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-indigo-900 shadow-xs"
+                            displayNode={
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isAdmin) {
+                                    setInlineEdit({ docId: doc.id, field: 'document_code', value: doc.document_code || '' });
+                                  }
+                                }}
+                                className={`font-mono font-semibold text-indigo-700 truncate max-w-[160px] px-1.5 py-0.5 rounded transition-all ${
+                                  isAdmin ? 'cursor-pointer hover:bg-sky-100/70 hover:shadow-2xs' : 'cursor-default'
+                                }`}
+                              >
+                                {doc.document_code || '---'}
+                              </span>
+                            }
+                          />
                         </div>
 
                         {/* Đơn vị ban hành */}
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500 flex items-center gap-1.5 font-medium">
+                        <div className="flex items-center justify-between text-xs min-h-[26px]">
+                          <span className="text-slate-500 flex items-center gap-1.5 font-medium shrink-0">
                             <Building className="w-3 h-3 text-slate-400" /> Đơn vị:
                           </span>
-                          <span
-                            className="text-slate-800 font-medium truncate max-w-[150px]"
-                            title={doc.issuing_authority || undefined}
-                          >
-                            {abbreviateIssuer(doc.issuing_authority)}
-                          </span>
+                          <InlineEditable
+                            docId={doc.id}
+                            field="issuing_authority"
+                            type="text"
+                            currentValue={doc.issuing_authority || ''}
+                            activeEdit={inlineEdit}
+                            setActiveEdit={setInlineEdit}
+                            onSave={handleSaveInline}
+                            containerClassName="shrink-0"
+                            inputClassName="w-36 text-xs font-medium px-1 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-800 shadow-xs"
+                            displayNode={
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isAdmin) {
+                                    setInlineEdit({ docId: doc.id, field: 'issuing_authority', value: doc.issuing_authority || '' });
+                                  }
+                                }}
+                                className={`text-slate-800 font-medium truncate max-w-[160px] px-1.5 py-0.5 rounded transition-all ${
+                                  isAdmin ? 'cursor-pointer hover:bg-sky-100/70 hover:shadow-2xs' : 'cursor-default'
+                                }`}
+                              >
+                                {abbreviateIssuer(doc.issuing_authority)}
+                              </span>
+                            }
+                          />
                         </div>
 
                         {/* Ngày ban hành */}
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500 flex items-center gap-1.5 font-medium">
+                        <div className="flex items-center justify-between text-xs min-h-[26px]">
+                          <span className="text-slate-500 flex items-center gap-1.5 font-medium shrink-0">
                             <Calendar className="w-3 h-3 text-slate-400" /> Ban hành:
                           </span>
-                          <span className="font-mono text-slate-700 font-medium">
-                            {doc.issue_date
-                              ? new Date(doc.issue_date).toLocaleDateString('vi-VN')
-                              : '---'}
-                          </span>
+                          <InlineEditable
+                            docId={doc.id}
+                            field="issue_date"
+                            type="date"
+                            currentValue={toYMD(doc.issue_date)}
+                            activeEdit={inlineEdit}
+                            setActiveEdit={setInlineEdit}
+                            onSave={handleSaveInline}
+                            containerClassName="shrink-0"
+                            inputClassName="w-36 text-xs font-mono font-medium px-1 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-800 shadow-xs"
+                            displayNode={
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isAdmin) {
+                                    setInlineEdit({ docId: doc.id, field: 'issue_date', value: toYMD(doc.issue_date) });
+                                  }
+                                }}
+                                className={`font-mono text-slate-700 font-medium px-1.5 py-0.5 rounded transition-all ${
+                                  isAdmin ? 'cursor-pointer hover:bg-sky-100/70 hover:shadow-2xs' : 'cursor-default'
+                                }`}
+                              >
+                                {doc.issue_date
+                                  ? new Date(doc.issue_date).toLocaleDateString('vi-VN')
+                                  : '---'}
+                              </span>
+                            }
+                          />
                         </div>
 
                         {/* Chuyên môn (Rút gọn: QLKT, CTHK, CHK...) */}
-                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
-                          <span className="text-slate-500 font-medium">Chuyên môn:</span>
-                          <span
-                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200"
-                            title={`Chuyên môn: ${dept.label}`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
-                            <span className="truncate max-w-[120px]">{dept.shortLabel || dept.label}</span>
-                          </span>
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 min-h-[30px]">
+                          <span className="text-slate-500 font-medium shrink-0">Chuyên môn:</span>
+                          <InlineEditable
+                            docId={doc.id}
+                            field="department_access"
+                            type="select"
+                            currentValue={doc.department_access?.[0] || 'QL_KY_THUAT'}
+                            activeEdit={inlineEdit}
+                            setActiveEdit={setInlineEdit}
+                            onSave={handleSaveInline}
+                            containerClassName="shrink-0"
+                            inputClassName="w-36 text-xs font-semibold px-1 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-800 shadow-xs"
+                            selectOptions={DEPARTMENTS.filter((d) => d.id !== 'all').map((d) => ({
+                              id: d.id,
+                              label: d.shortLabel || d.label,
+                            }))}
+                            displayNode={
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isAdmin) {
+                                    setInlineEdit({
+                                      docId: doc.id,
+                                      field: 'department_access',
+                                      value: doc.department_access?.[0] || 'QL_KY_THUAT',
+                                    });
+                                  }
+                                }}
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 transition-all ${
+                                  isAdmin ? 'cursor-pointer hover:bg-sky-100/70 hover:border-sky-300' : 'cursor-default'
+                                }`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
+                                <span className="truncate max-w-[120px]">{dept.shortLabel || dept.label}</span>
+                              </span>
+                            }
+                          />
                         </div>
                       </div>
 
