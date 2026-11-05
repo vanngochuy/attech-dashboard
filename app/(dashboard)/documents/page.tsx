@@ -1029,7 +1029,7 @@ function DocumentsContent() {
 
                           {/* Right Columns */}
                           <div className="flex items-center gap-4 shrink-0">
-                            {/* Số hiệu -> Không mở xem trước; Admin click vào để sửa trực tiếp tại chỗ */}
+                            {/* Số hiệu -> Không mở xem trước; Admin click 2 lần (double click) để sửa trực tiếp tại chỗ */}
                             <InlineEditable
                               docId={doc.id}
                               field="document_code"
@@ -1042,13 +1042,14 @@ function DocumentsContent() {
                               inputClassName="w-full text-xs font-mono font-semibold px-1.5 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-indigo-900 shadow-xs"
                               displayNode={
                                 <span
-                                  onClick={(e) => {
+                                  onClick={(e) => e.stopPropagation()}
+                                  onDoubleClick={(e) => {
                                     e.stopPropagation();
                                     if (isAdmin) {
                                       setInlineEdit({ docId: doc.id, field: 'document_code', value: doc.document_code || '' });
                                     }
                                   }}
-                                  className={`w-28 text-left font-mono text-xs font-semibold truncate hidden sm:inline px-1.5 py-0.5 rounded transition-all ${
+                                  className={`w-28 text-left font-mono text-xs font-semibold truncate hidden sm:inline px-1.5 py-0.5 rounded transition-all select-none ${
                                     isAdmin
                                       ? 'cursor-pointer text-indigo-700 hover:bg-sky-100/70 hover:shadow-2xs'
                                       : 'cursor-default text-indigo-700'
@@ -1059,7 +1060,7 @@ function DocumentsContent() {
                               }
                             />
 
-                            {/* Đơn vị -> Không mở xem trước; Admin click vào để sửa trực tiếp tại chỗ */}
+                            {/* Đơn vị -> Không mở xem trước; Admin click 2 lần (double click) để sửa trực tiếp tại chỗ */}
                             <InlineEditable
                               docId={doc.id}
                               field="issuing_authority"
@@ -1072,13 +1073,14 @@ function DocumentsContent() {
                               inputClassName="w-full text-xs font-medium px-1.5 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-800 shadow-xs"
                               displayNode={
                                 <span
-                                  onClick={(e) => {
+                                  onClick={(e) => e.stopPropagation()}
+                                  onDoubleClick={(e) => {
                                     e.stopPropagation();
                                     if (isAdmin) {
                                       setInlineEdit({ docId: doc.id, field: 'issuing_authority', value: doc.issuing_authority || '' });
                                     }
                                   }}
-                                  className={`w-28 text-left text-xs font-medium truncate hidden md:inline px-1.5 py-0.5 rounded transition-all ${
+                                  className={`w-28 text-left text-xs font-medium truncate hidden md:inline px-1.5 py-0.5 rounded transition-all select-none ${
                                     isAdmin
                                       ? 'cursor-pointer text-slate-700 hover:bg-sky-100/70 hover:shadow-2xs'
                                       : 'cursor-default text-slate-700'
@@ -1089,7 +1091,7 @@ function DocumentsContent() {
                               }
                             />
 
-                            {/* Ngày ban hành -> Không mở xem trước; Admin click vào để sửa trực tiếp tại chỗ */}
+                            {/* Ngày ban hành -> Không mở xem trước; Admin click 2 lần (double click) để sửa trực tiếp tại chỗ */}
                             <InlineEditable
                               docId={doc.id}
                               field="issue_date"
@@ -1102,13 +1104,14 @@ function DocumentsContent() {
                               inputClassName="w-full text-xs font-mono font-medium px-1 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-800 shadow-xs"
                               displayNode={
                                 <span
-                                  onClick={(e) => {
+                                  onClick={(e) => e.stopPropagation()}
+                                  onDoubleClick={(e) => {
                                     e.stopPropagation();
                                     if (isAdmin) {
                                       setInlineEdit({ docId: doc.id, field: 'issue_date', value: toYMD(doc.issue_date) });
                                     }
                                   }}
-                                  className={`w-28 text-center font-mono text-xs font-medium px-1.5 py-0.5 rounded transition-all ${
+                                  className={`w-28 text-center font-mono text-xs font-medium px-1.5 py-0.5 rounded transition-all select-none ${
                                     isAdmin
                                       ? 'cursor-pointer text-slate-600 hover:bg-sky-100/70 hover:shadow-2xs'
                                       : 'cursor-default text-slate-600'
@@ -1121,7 +1124,7 @@ function DocumentsContent() {
                               }
                             />
 
-                            {/* Chuyên môn (Rút gọn: QLKT, CTHK, CHK...) -> Không mở xem trước; Admin click vào để sửa trực tiếp tại chỗ */}
+                            {/* Chuyên môn (Rút gọn: QLKT, CTHK, CHK...) -> Không mở xem trước; Admin click 2 lần (double click) để sửa trực tiếp tại chỗ */}
                             <InlineEditable
                               docId={doc.id}
                               field="department_access"
@@ -1138,7 +1141,8 @@ function DocumentsContent() {
                               }))}
                               displayNode={
                                 <span
-                                  onClick={(e) => {
+                                  onClick={(e) => e.stopPropagation()}
+                                  onDoubleClick={(e) => {
                                     e.stopPropagation();
                                     if (isAdmin) {
                                       setInlineEdit({
@@ -1148,7 +1152,7 @@ function DocumentsContent() {
                                       });
                                     }
                                   }}
-                                  className={`w-32 text-center hidden lg:inline px-1 py-0.5 rounded transition-all ${
+                                  className={`w-32 text-center hidden lg:inline px-1 py-0.5 rounded transition-all select-none ${
                                     isAdmin ? 'cursor-pointer hover:bg-sky-100/70' : 'cursor-default'
                                   }`}
                                 >
@@ -1287,7 +1291,7 @@ function DocumentsContent() {
                         </div>
                       </div>
 
-                      {/* 2. Thân Khung: 4 trường thông tin chi tiết -> Admin nhấn vào từng trường để sửa trực tiếp tại chỗ */}
+                      {/* 2. Thân Khung: 4 trường thông tin chi tiết -> Admin nhấn 2 lần (double click) vào từng trường để sửa trực tiếp tại chỗ */}
                       <div className="p-3.5 space-y-2 bg-white flex-1">
                         {/* Số hiệu văn bản */}
                         <div className="flex items-center justify-between text-xs min-h-[26px]">
@@ -1306,13 +1310,14 @@ function DocumentsContent() {
                             inputClassName="w-36 text-xs font-mono font-semibold px-1 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-indigo-900 shadow-xs"
                             displayNode={
                               <span
-                                onClick={(e) => {
+                                onClick={(e) => e.stopPropagation()}
+                                onDoubleClick={(e) => {
                                   e.stopPropagation();
                                   if (isAdmin) {
                                     setInlineEdit({ docId: doc.id, field: 'document_code', value: doc.document_code || '' });
                                   }
                                 }}
-                                className={`font-mono font-semibold text-indigo-700 truncate max-w-[160px] px-1.5 py-0.5 rounded transition-all ${
+                                className={`font-mono font-semibold text-indigo-700 truncate max-w-[160px] px-1.5 py-0.5 rounded transition-all select-none ${
                                   isAdmin ? 'cursor-pointer hover:bg-sky-100/70 hover:shadow-2xs' : 'cursor-default'
                                 }`}
                               >
@@ -1339,13 +1344,14 @@ function DocumentsContent() {
                             inputClassName="w-36 text-xs font-medium px-1 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-800 shadow-xs"
                             displayNode={
                               <span
-                                onClick={(e) => {
+                                onClick={(e) => e.stopPropagation()}
+                                onDoubleClick={(e) => {
                                   e.stopPropagation();
                                   if (isAdmin) {
                                     setInlineEdit({ docId: doc.id, field: 'issuing_authority', value: doc.issuing_authority || '' });
                                   }
                                 }}
-                                className={`text-slate-800 font-medium truncate max-w-[160px] px-1.5 py-0.5 rounded transition-all ${
+                                className={`text-slate-800 font-medium truncate max-w-[160px] px-1.5 py-0.5 rounded transition-all select-none ${
                                   isAdmin ? 'cursor-pointer hover:bg-sky-100/70 hover:shadow-2xs' : 'cursor-default'
                                 }`}
                               >
@@ -1372,13 +1378,14 @@ function DocumentsContent() {
                             inputClassName="w-36 text-xs font-mono font-medium px-1 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-800 shadow-xs"
                             displayNode={
                               <span
-                                onClick={(e) => {
+                                onClick={(e) => e.stopPropagation()}
+                                onDoubleClick={(e) => {
                                   e.stopPropagation();
                                   if (isAdmin) {
                                     setInlineEdit({ docId: doc.id, field: 'issue_date', value: toYMD(doc.issue_date) });
                                   }
                                 }}
-                                className={`font-mono text-slate-700 font-medium px-1.5 py-0.5 rounded transition-all ${
+                                className={`font-mono text-slate-700 font-medium px-1.5 py-0.5 rounded transition-all select-none ${
                                   isAdmin ? 'cursor-pointer hover:bg-sky-100/70 hover:shadow-2xs' : 'cursor-default'
                                 }`}
                               >
@@ -1409,7 +1416,8 @@ function DocumentsContent() {
                             }))}
                             displayNode={
                               <span
-                                onClick={(e) => {
+                                onClick={(e) => e.stopPropagation()}
+                                onDoubleClick={(e) => {
                                   e.stopPropagation();
                                   if (isAdmin) {
                                     setInlineEdit({
@@ -1419,7 +1427,7 @@ function DocumentsContent() {
                                     });
                                   }
                                 }}
-                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 transition-all ${
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 transition-all select-none ${
                                   isAdmin ? 'cursor-pointer hover:bg-sky-100/70 hover:border-sky-300' : 'cursor-default'
                                 }`}
                               >
