@@ -235,7 +235,7 @@ export async function POST(req: Request) {
           const n8nRes = await fetch(n8nEmailWebhook, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fromDate, toDate, senderFilter }),
+            body: JSON.stringify({ fromDate, toDate, senderFilter, mailbox: 'tuh@attech.com.vn' }),
           });
           if (n8nRes.ok) {
             const n8nData = await n8nRes.json();
@@ -365,6 +365,59 @@ export async function POST(req: Request) {
         success: true,
         emailDrafts: updated,
       });
+    }
+
+    // 4. Hành động: n8n (luồng CNLUQWWnkPHYRTRB - hộp thư tuh@attech.com.vn) đẩy danh sách PDF vừa lưu vào
+    //    `03_TÀI LIỆU CHƯA XÁC THỰC` về Web để tự động đối chiếu với kho Tài liệu chính thức
+    if (action === 'IMPORT_ITEMS' && Array.isArray(body.items)) {
+      let importedCount = 0;
+      const updated = [...currentDrafts];
+
+      for (const item of body.items) {
+        if (!item?.pdfFileName) continue;
+        const exists = updated.some(
+          (d) =>
+            (item.driveFileId && d.driveFileId === item.driveFileId) ||
+            (d.pdfFileName === item.pdfFileName && d.receivedDate === item.receivedDate)
+        );
+        if (exists) continue;
+
+        const title = item.extractedTitle || item.pdfFileName;
+        const comp = await matchAgainstOfficialDocuments(supabase, title, item.extractedCode);
+
+        updated.unshift({
+          id: `edraft-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          emailSubject: item.emailSubject || item.pdfFileName,
+          senderEmail: item.senderEmail || body.mailbox || 'tuh@attech.com.vn',
+          receivedDate:
+            item.receivedDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
+          pdfFileName: item.pdfFileName,
+          extractedTitle: title,
+          extractedCode: item.extractedCode || '',
+          extractedIssuer: item.extractedIssuer || 'ATTECH',
+          extractedIssueDate: item.extractedIssueDate || '',
+          scopeDomain: item.scopeDomain || 'QL_KY_THUAT',
+          fileUrl: item.fileUrl || '',
+          driveFileId: item.driveFileId || undefined,
+          driveFolderName: 'ATTECH_DOCUMENTS/03_TÀI LIỆU CHƯA XÁC THỰC',
+          matchType: comp.matchType,
+          similarityScore: comp.similarityScore,
+          matchedOfficialDoc: comp.matchedOfficialDoc,
+          comparisonSummary: comp.comparisonSummary,
+          updatedAt: new Date().toISOString(),
+        });
+        importedCount++;
+      }
+
+      if (supabase && importedCount > 0) {
+        const blob = new Blob([JSON.stringify(updated, null, 2)], { type: 'application/json' });
+        await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
+          contentType: 'application/json',
+          upsert: true,
+        });
+      }
+
+      return NextResponse.json({ success: true, importedCount, emailDrafts: updated });
     }
 
     return NextResponse.json({ error: 'Hành động không hợp lệ.' }, { status: 400 });
