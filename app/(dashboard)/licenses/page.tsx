@@ -18,7 +18,10 @@ import {
   Paperclip,
   RefreshCw,
   Database,
+  Sparkles,
+  UploadCloud,
 } from 'lucide-react';
+import { PDFDocument } from 'pdf-lib';
 import { useAuth } from '@/components/auth-context';
 import {
   LicenseItem,
@@ -27,6 +30,36 @@ import {
   formatToDMY,
   formatToYMD,
 } from '@/lib/compliance';
+
+// Cắt tối đa 2 trang đầu của file PDF ngay trên trình duyệt để AI đọc siêu tốc (~1 giây)
+async function slicePdfFirst2PagesForLicense(originalFile: File): Promise<File> {
+  const isPdf =
+    originalFile.type === 'application/pdf' ||
+    originalFile.name.toLowerCase().endsWith('.pdf');
+
+  if (!isPdf) return originalFile;
+
+  try {
+    const arrayBuffer = await originalFile.arrayBuffer();
+    const srcDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+    const pageCount = srcDoc.getPageCount();
+
+    if (pageCount <= 2) return originalFile;
+
+    const trimmedDoc = await PDFDocument.create();
+    const copiedPages = await trimmedDoc.copyPages(srcDoc, [0, 1]);
+    copiedPages.forEach((p) => trimmedDoc.addPage(p));
+
+    const trimmedBytes = await trimmedDoc.save();
+    return new File(
+      [trimmedBytes.buffer as ArrayBuffer],
+      `preview_2pages_${originalFile.name}`,
+      { type: 'application/pdf' }
+    );
+  } catch {
+    return originalFile;
+  }
+}
 
 export default function OperatingLicensesPage() {
   const { isAdmin } = useAuth();
@@ -37,16 +70,23 @@ export default function OperatingLicensesPage() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'VALID' | 'EXPIRING_SOON' | 'EXPIRED'>('ALL');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Modal Thêm / Sửa giấy phép
+  // Modal Thêm / Sửa giấy phép (Đồng bộ AI đọc tự động như tab Tài liệu)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<LicenseItem | null>(null);
   const [formName, setFormName] = useState('');
   const [formCode, setFormCode] = useState('');
+  const [formIssuer, setFormIssuer] = useState('');
+  const [formIssueDate, setFormIssueDate] = useState('');
   const [formIsPermanent, setFormIsPermanent] = useState(false);
   const [formExpiryDate, setFormExpiryDate] = useState('');
   const [formFileUrl, setFormFileUrl] = useState('');
   const [formFileName, setFormFileName] = useState('');
   const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [isExtractingAI, setIsExtractingAI] = useState(false);
+  const [aiFilled, setAiFilled] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [replaceExistingId, setReplaceExistingId] = useState<string | null>(null);
+  const modalFileInputRef = useRef<HTMLInputElement>(null);
 
   // Upload nhanh file trực tiếp từ dòng bảng
   const quickUploadInputRef = useRef<HTMLInputElement>(null);
@@ -119,10 +159,14 @@ export default function OperatingLicensesPage() {
     setEditingItem(null);
     setFormName('');
     setFormCode('');
+    setFormIssuer('');
+    setFormIssueDate('');
     setFormIsPermanent(false);
     setFormExpiryDate('');
     setFormFileUrl('');
     setFormFileName('');
+    setAiFilled(false);
+    setReplaceExistingId(null);
     setIsModalOpen(true);
   };
 
@@ -130,37 +174,116 @@ export default function OperatingLicensesPage() {
     setEditingItem(item);
     setFormName(item.name);
     setFormCode(item.licenseCode || '');
+    setFormIssuer(item.issuer || '');
+    setFormIssueDate(item.issueDate ? formatToYMD(item.issueDate) : '');
     const isPerm = item.expiryDate.toLowerCase().includes('vô thời hạn');
     setFormIsPermanent(isPerm);
     setFormExpiryDate(isPerm ? '' : formatToYMD(item.expiryDate));
     setFormFileUrl(item.fileUrl || '');
     setFormFileName(item.fileName || '');
+    setAiFilled(false);
+    setReplaceExistingId(null);
     setIsModalOpen(true);
+  };
+
+  // Tìm xem giấy phép vừa quét AI có phải bản gia hạn/cập nhật cho giấy phép đang có hay không
+  const matchedRenewalCandidate = useMemo(() => {
+    if (editingItem) return null;
+    const cleanName = formName.trim().toLowerCase();
+    const cleanCode = formCode.trim().toLowerCase();
+    if (!cleanName && !cleanCode) return null;
+
+    return (
+      licenses.find((lic) => {
+        if (cleanCode.length >= 4 && (lic.licenseCode || '').toLowerCase() === cleanCode) {
+          return true;
+        }
+        if (cleanName.length >= 8) {
+          const licName = lic.name.toLowerCase();
+          if (licName === cleanName || licName.includes(cleanName) || cleanName.includes(licName)) {
+            return true;
+          }
+        }
+        return false;
+      }) || null
+    );
+  }, [editingItem, formName, formCode, licenses]);
+
+  // Xử lý kéo thả hoặc chọn file trong Modal: Vừa tải file lên Supabase Storage vừa gọi AI Gemini đọc Số GP, Tên GP, Thời hạn
+  const processLicenseFileWithAI = async (file: File) => {
+    setIsUploadingFile(true);
+    setIsExtractingAI(true);
+    setAiFilled(false);
+
+    // 1. Chạy song song: Upload file gốc lên Supabase Storage & Gửi 2 trang đầu cho Gemini AI đọc
+    const uploadTask = (async () => {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('folder', 'licenses');
+      const res = await fetch('/api/compliance', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Tải file thất bại');
+      setFormFileUrl(data.fileUrl);
+      setFormFileName(data.fileName || file.name);
+    })();
+
+    const aiExtractTask = (async () => {
+      try {
+        const lightweightFile = await slicePdfFirst2PagesForLicense(file);
+        const aiFd = new FormData();
+        aiFd.append('file', lightweightFile);
+        aiFd.append('mode', 'license');
+
+        const aiRes = await fetch('/api/documents/extract-metadata', {
+          method: 'POST',
+          body: aiFd,
+        });
+        const aiData = await aiRes.json();
+
+        if (aiRes.ok && aiData.success && aiData.metadata) {
+          const m = aiData.metadata;
+          if (m.title) setFormName(m.title);
+          if (m.document_code) setFormCode(m.document_code);
+          if (m.issuing_authority) setFormIssuer(m.issuing_authority);
+          if (m.issue_date) setFormIssueDate(m.issue_date);
+          if (m.is_permanent) {
+            setFormIsPermanent(true);
+            setFormExpiryDate('');
+          } else if (m.expiry_date) {
+            setFormIsPermanent(false);
+            setFormExpiryDate(formatToYMD(m.expiry_date));
+          }
+          setAiFilled(true);
+        } else {
+          // Fallback điền tên file nếu chưa có tên giấy phép
+          if (!formName) {
+            setFormName(file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '));
+          }
+        }
+      } catch (err) {
+        console.warn('Không thể trích xuất AI cho giấy phép:', err);
+        if (!formName) {
+          setFormName(file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '));
+        }
+      }
+    })();
+
+    try {
+      await Promise.all([uploadTask, aiExtractTask]);
+      showToast('success', `Đã tải lên "${file.name}" và trích xuất thông tin bằng AI!`);
+    } catch (err: any) {
+      showToast('error', err.message || 'Không thể tải file lên');
+    } finally {
+      setIsUploadingFile(false);
+      setIsExtractingAI(false);
+    }
   };
 
   const handleUploadFileInModal = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-
-    setIsUploadingFile(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('folder', 'licenses');
-
-      const res = await fetch('/api/compliance', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Tải file thất bại');
-
-      setFormFileUrl(data.fileUrl);
-      setFormFileName(data.fileName || file.name);
-      showToast('success', `Đã tải lên file "${file.name}"`);
-    } catch (err: any) {
-      showToast('error', err.message || 'Không thể tải file lên');
-    } finally {
-      setIsUploadingFile(false);
-    }
+    await processLicenseFileWithAI(file);
   };
 
   const handleQuickUploadTrigger = (id: string) => {
@@ -217,13 +340,17 @@ export default function OperatingLicensesPage() {
         ? formatToDMY(formExpiryDate)
         : 'Vô thời hạn';
 
-    if (editingItem) {
+    const targetUpdateId = editingItem?.id || replaceExistingId;
+
+    if (targetUpdateId) {
       const updated = licenses.map((lic) =>
-        lic.id === editingItem.id
+        lic.id === targetUpdateId
           ? {
               ...lic,
               name: formName.trim(),
               licenseCode: formCode.trim() || undefined,
+              issuer: formIssuer.trim() || undefined,
+              issueDate: formIssueDate ? formatToDMY(formIssueDate) : undefined,
               expiryDate: finalExpiry,
               fileUrl: formFileUrl.trim() || undefined,
               fileName: formFileName.trim() || undefined,
@@ -231,12 +358,14 @@ export default function OperatingLicensesPage() {
             }
           : lic
       );
-      await persistLicenses(updated, 'Đã cập nhật giấy phép!');
+      await persistLicenses(updated, 'Đã cập nhật giấy phép khai thác!');
     } else {
       const newItem: LicenseItem = {
         id: `lic-${Date.now()}`,
         name: formName.trim(),
         licenseCode: formCode.trim() || undefined,
+        issuer: formIssuer.trim() || undefined,
+        issueDate: formIssueDate ? formatToDMY(formIssueDate) : undefined,
         expiryDate: finalExpiry,
         fileUrl: formFileUrl.trim() || undefined,
         fileName: formFileName.trim() || undefined,
@@ -609,45 +738,189 @@ export default function OperatingLicensesPage() {
         )}
       </div>
 
-      {/* Modal Thêm / Chỉnh sửa Giấy phép khai thác */}
+      {/* Modal Thêm / Chỉnh sửa Giấy phép khai thác (Tích hợp AI Gemini đọc tự động giống tab Tài liệu) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 my-4">
             <div className="px-6 py-4 bg-[#1b3252] text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-sky-400" />
-                <h3 className="text-sm font-bold">
-                  {editingItem ? 'Chỉnh sửa Giấy phép khai thác' : 'Thêm Giấy phép khai thác mới'}
-                </h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-400/30 flex items-center justify-center text-sky-300">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold">
+                    {editingItem ? 'Chỉnh sửa Giấy phép khai thác' : 'Thêm Giấy phép khai thác mới'}
+                  </h3>
+                  <p className="text-[11px] text-sky-200/80">
+                    Tải file PDF/Ảnh lên để AI Gemini tự động đọc Số giấy phép, Tên &amp; Thời hạn
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-lg hover:bg-white/15 text-slate-300 hover:text-white"
+                className="p-1.5 rounded-lg hover:bg-white/15 text-slate-300 hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveModal} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleSaveModal} className="p-6 space-y-4 text-xs max-h-[82vh] overflow-y-auto">
+              {/* Khu vực Kéo thả / Chọn File PDF & AI Tự động đọc (Tham chiếu chuẩn tab Tài liệu) */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1.5">
-                  Tên giấy phép khai thác <span className="text-rose-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                    <UploadCloud className="w-4 h-4 text-sky-600" />
+                    <span>Bản scan Giấy phép (PDF / Ảnh) — AI Tự động trích xuất</span>
+                  </label>
+                  {isExtractingAI && (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200 animate-pulse">
+                      <Sparkles className="w-3 h-3" />
+                      AI đang đọc Số &amp; Tên giấy phép...
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    const dropped = e.dataTransfer.files?.[0];
+                    if (dropped) await processLicenseFileWithAI(dropped);
+                  }}
+                  onClick={() => modalFileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all ${
+                    isDragging
+                      ? 'border-sky-500 bg-sky-50'
+                      : formFileUrl
+                        ? 'border-emerald-300 bg-emerald-50/50'
+                        : 'border-slate-300 hover:border-sky-400 bg-slate-50/70 hover:bg-sky-50/30'
+                  }`}
+                >
+                  <input
+                    ref={modalFileInputRef}
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={handleUploadFileInModal}
+                    className="hidden"
+                  />
+
+                  {isUploadingFile || isExtractingAI ? (
+                    <div className="flex flex-col items-center justify-center py-2 gap-1.5 text-sky-700">
+                      <Loader2 className="w-6 h-6 animate-spin text-sky-600" />
+                      <span className="font-semibold">
+                        Đang tải file lên Cloud &amp; dùng AI Gemini đọc thông tin giấy phép...
+                      </span>
+                    </div>
+                  ) : formFileUrl ? (
+                    <div className="flex items-center justify-between gap-3 text-left">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 truncate">
+                            {formFileName || 'Đã đính kèm bản scan giấy phép'}
+                          </p>
+                          <p className="text-[11px] text-emerald-700">
+                            Đã lưu trên Supabase Storage • Nhấn để chọn file khác
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFormFileUrl('');
+                          setFormFileName('');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold text-[11px] shrink-0"
+                      >
+                        Gỡ file
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="py-1.5">
+                      <UploadCloud className="w-7 h-7 text-sky-600 mx-auto mb-1" />
+                      <p className="font-semibold text-slate-800">
+                        Kéo thả file PDF / Ảnh giấy phép vào đây hoặc{' '}
+                        <span className="text-sky-600 underline">Chọn từ máy tính</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        AI sẽ tự động đọc 2 trang đầu để điền Tên giấy phép, Số giấy phép, Đơn vị cấp và Ngày hết hạn
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Cảnh báo thông minh nếu phát hiện Giấy phép tải lên là bản Gia hạn / Cập nhật cho giấy phép cũ */}
+              {matchedRenewalCandidate && (
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-bold text-xs">
+                        Phát hiện giấy phép tương tự đang có trong danh sách:
+                      </p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">
+                        <strong>{matchedRenewalCandidate.name}</strong> (Số:{' '}
+                        <span className="font-mono">{matchedRenewalCandidate.licenseCode || '---'}</span>{' '}
+                        • Hạn hiện tại: <span className="font-mono">{matchedRenewalCandidate.expiryDate}</span>)
+                      </p>
+                    </div>
+                  </div>
+                  <label className="inline-flex items-center gap-2 cursor-pointer select-none font-semibold text-amber-900 bg-white/80 px-3 py-1.5 rounded-lg border border-amber-300">
+                    <input
+                      type="checkbox"
+                      checked={replaceExistingId === matchedRenewalCandidate.id}
+                      onChange={(e) =>
+                        setReplaceExistingId(e.target.checked ? matchedRenewalCandidate.id : null)
+                      }
+                      className="rounded border-amber-400 text-sky-600"
+                    />
+                    <span>Cập nhật / Gia hạn trực tiếp vào giấy phép này (thay vì tạo dòng mới)</span>
+                  </label>
+                </div>
+              )}
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-bold text-slate-700">
+                    Tên giấy phép khai thác <span className="text-rose-500">*</span>
+                  </label>
+                  {aiFilled && formName && (
+                    <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <Sparkles className="w-2.5 h-2.5" /> AI tự động điền
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="VD: Giấy phép sử dụng tần số và thiết bị vô tuyến điện (DVOR/DME)"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-sky-600 focus:outline-none text-slate-900"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-sky-600 focus:outline-none text-slate-900 font-medium"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1.5">
-                    Số giấy phép / Ký hiệu
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-bold text-slate-700">
+                      Số giấy phép / Ký hiệu
+                    </label>
+                    {aiFilled && formCode && (
+                      <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" /> AI
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={formCode}
@@ -658,9 +931,57 @@ export default function OperatingLicensesPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1.5">
-                    Thời hạn hiệu lực
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-bold text-slate-700">
+                      Cơ quan cấp phép
+                    </label>
+                    {aiFilled && formIssuer && (
+                      <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" /> AI
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={formIssuer}
+                    onChange={(e) => setFormIssuer(e.target.value)}
+                    placeholder="VD: Cục Tần số vô tuyến điện / Cục HKVN"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-sky-600 focus:outline-none text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-bold text-slate-700">
+                      Ngày cấp phép
+                    </label>
+                    {aiFilled && formIssueDate && (
+                      <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" /> AI
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    value={formIssueDate}
+                    onChange={(e) => setFormIssueDate(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:border-sky-600 focus:outline-none text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-bold text-slate-700">
+                      Thời hạn hiệu lực (Hết hạn)
+                    </label>
+                    {aiFilled && (formExpiryDate || formIsPermanent) && (
+                      <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" /> AI
+                      </span>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     <input
                       type="date"
@@ -682,81 +1003,24 @@ export default function OperatingLicensesPage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-700 flex items-center gap-1.5">
-                    <Paperclip className="w-3.5 h-3.5 text-sky-600" />
-                    <span>File Giấy phép đính kèm (PDF / Ảnh)</span>
-                  </label>
-                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-semibold cursor-pointer transition-colors shadow-2xs">
-                    {isUploadingFile ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Đang tải...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Chọn file</span>
-                      </>
-                    )}
-                    <input
-                      type="file"
-                      accept=".pdf,image/*"
-                      onChange={handleUploadFileInModal}
-                      disabled={isUploadingFile}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-
-                {formFileUrl ? (
-                  <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-emerald-200 text-emerald-800">
-                    <div className="flex items-center gap-2 truncate">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="font-medium truncate">
-                        {formFileName || 'Đã đính kèm file'}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFormFileUrl('');
-                        setFormFileName('');
-                      }}
-                      className="text-rose-600 hover:underline text-[11px] font-semibold ml-2 shrink-0"
-                    >
-                      Gỡ
-                    </button>
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={formFileUrl}
-                    onChange={(e) => {
-                      setFormFileUrl(e.target.value);
-                      if (!formFileName) setFormFileName('File Google Drive / Link');
-                    }}
-                    placeholder="Hoặc dán đường link file PDF / Google Drive vào đây..."
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-sky-500"
-                  />
-                )}
-              </div>
-
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold"
+                  className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving || isUploadingFile}
-                  className="px-5 py-2 rounded-xl bg-[#1b3252] hover:bg-slate-800 text-white font-semibold shadow-sm disabled:opacity-50"
+                  disabled={isSaving || isUploadingFile || isExtractingAI}
+                  className="px-5 py-2 rounded-xl bg-[#1b3252] hover:bg-slate-800 text-white font-semibold shadow-sm disabled:opacity-50 cursor-pointer"
                 >
-                  {isSaving ? 'Đang lưu...' : editingItem ? 'Lưu thay đổi' : 'Thêm giấy phép'}
+                  {isSaving
+                    ? 'Đang lưu...'
+                    : editingItem || replaceExistingId
+                      ? 'Lưu cập nhật giấy phép'
+                      : 'Thêm giấy phép'}
                 </button>
               </div>
             </form>

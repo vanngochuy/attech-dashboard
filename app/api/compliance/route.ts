@@ -3,8 +3,10 @@ import { getSupabaseAdminClient, getSupabaseClient } from '@/lib/supabase';
 import {
   DEFAULT_LICENSES,
   DEFAULT_TRAINING_RECORDS,
+  DEFAULT_EMAIL_DRAFTS,
   LicenseItem,
   StaffTrainingRecord,
+  EmailDraftItem,
 } from '@/lib/compliance';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +14,7 @@ export const dynamic = 'force-dynamic';
 const BUCKET_NAME = 'compliance-files';
 const LICENSES_PATH = 'data/licenses.json';
 const TRAINING_PATH = 'data/training.json';
+const EMAIL_DRAFTS_PATH = 'data/email_drafts.json';
 
 async function ensureComplianceBucket(supabase: any) {
   try {
@@ -104,16 +107,30 @@ export async function GET(req: Request) {
       return NextResponse.json({ configured: true, training });
     }
 
-    const [licenses, training] = await Promise.all([
+    if (type === 'email_drafts') {
+      const emailDrafts = await readJsonFromStorage<EmailDraftItem[]>(
+        supabase,
+        EMAIL_DRAFTS_PATH,
+        DEFAULT_EMAIL_DRAFTS
+      );
+      return NextResponse.json({ configured: true, emailDrafts });
+    }
+
+    const [licenses, training, emailDrafts] = await Promise.all([
       readJsonFromStorage<LicenseItem[]>(supabase, LICENSES_PATH, DEFAULT_LICENSES),
       readJsonFromStorage<StaffTrainingRecord[]>(
         supabase,
         TRAINING_PATH,
         DEFAULT_TRAINING_RECORDS
       ),
+      readJsonFromStorage<EmailDraftItem[]>(
+        supabase,
+        EMAIL_DRAFTS_PATH,
+        DEFAULT_EMAIL_DRAFTS
+      ),
     ]);
 
-    return NextResponse.json({ configured: true, licenses, training });
+    return NextResponse.json({ configured: true, licenses, training, emailDrafts });
   } catch (err: any) {
     return NextResponse.json(
       {
@@ -208,6 +225,17 @@ export async function POST(req: Request) {
         );
       }
       return NextResponse.json({ success: true, training: records });
+    }
+
+    if (type === 'email_drafts' && Array.isArray(records)) {
+      const ok = await writeJsonToStorage(supabase, EMAIL_DRAFTS_PATH, records);
+      if (!ok) {
+        return NextResponse.json(
+          { error: 'Không thể lưu danh sách văn bản email dự thảo.' },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ success: true, emailDrafts: records });
     }
 
     return NextResponse.json({ error: 'Dữ liệu gửi lên không hợp lệ.' }, { status: 400 });

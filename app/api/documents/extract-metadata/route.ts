@@ -18,6 +18,7 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const mode = (formData.get('mode') as string) || 'document'; // 'document' | 'license'
 
     if (!file) {
       return NextResponse.json({ error: 'Không tìm thấy tập tin để phân tích' }, { status: 400 });
@@ -57,13 +58,25 @@ export async function POST(request: Request) {
       base64Data = buffer.toString('base64');
     }
 
-    const prompt = `Bạn là chuyên gia thẩm định và phân loại văn bản hành chính Việt Nam theo chuẩn Nghị định 30/2020/NĐ-CP.
+    const prompt =
+      mode === 'license'
+        ? `Bạn là chuyên gia thẩm định Giấy phép khai thác thiết bị hàng không, Giấy phép sử dụng tần số vô tuyến điện và Chứng nhận kỹ thuật CNS tại Việt Nam.
+Hãy đọc kỹ trang đầu (và trang 2 nếu có) của giấy phép đính kèm và trích xuất chính xác các thông tin sau:
+1. title: Tên đầy đủ của Giấy phép / Giấy chứng nhận kèm tên đài/trạm hoặc thiết bị (Ví dụ: "Giấy phép sử dụng tần số và thiết bị vô tuyến điện (DVOR/DME)", "Giấy phép khai thác cơ sở cung cấp dịch vụ bảo đảm hoạt động bay", "Giấy chứng nhận đủ điều kiện kỹ thuật thiết bị VOR/DME Tuy Hòa").
+2. document_code: Số giấy phép / Số ký hiệu trên giấy phép (Ví dụ: "125/GP-CTS", "GP-AW-24", "458/GP-CHK"). Nếu không có thì để chuỗi rỗng.
+3. issuing_authority: Cơ quan cấp phép (Ví dụ: "Cục Tần số vô tuyến điện", "Cục Hàng không Việt Nam", "Công ty TNHH Kỹ thuật Quản lý bay").
+4. issue_date: Ngày cấp phép theo định dạng YYYY-MM-DD. Nếu không thấy thì để chuỗi rỗng.
+5. expiry_date: Ngày hết hạn / Có giá trị đến ngày theo định dạng YYYY-MM-DD (Ví dụ: "Có giá trị đến ngày 27 tháng 02 năm 2028" -> "2028-02-27"). Nếu giấy phép ghi "Vô thời hạn" hoặc không giới hạn thời hạn thì trả về chuỗi rỗng "".
+6. is_permanent: true nếu giấy phép có hiệu lực vô thời hạn / không xác định thời hạn, ngược lại false.`
+        : `Bạn là chuyên gia thẩm định và phân loại văn bản hành chính Việt Nam theo chuẩn Nghị định 30/2020/NĐ-CP.
 Hãy đọc kỹ trang đầu (và trang 2 nếu có) của tài liệu đính kèm và trích xuất chính xác các thông tin quan trọng sau:
 1. title: Tên loại văn bản và trích yếu nội dung văn bản (Ví dụ: "Quyết định về việc kiện toàn Ban chỉ huy PCTT&TKCN của Công ty" hoặc "Thông tư quy định về kiểm tra an toàn kỹ thuật...").
 2. document_code: Số và ký hiệu văn bản (Ví dụ: "749/QĐ-KTQLB", "03/2009/NĐ-CP"). Nếu không có thì để chuỗi rỗng.
 3. issuing_authority: Tên cơ quan, tổ chức ban hành văn bản (Ví dụ: "Công ty TNHH Kỹ thuật Quản lý bay", "Tổng công ty Quản lý bay Việt Nam", "Bộ Giao thông Vận tải").
 4. issue_date: Ngày tháng năm ban hành văn bản theo định dạng chuẩn YYYY-MM-DD (Ví dụ: "Hà Nội, ngày 02 tháng 7 năm 2024" -> "2024-07-02"). Nếu không tìm thấy thì để chuỗi rỗng.
-5. scope_domain: Lựa chọn 1 trong các mã chuyên môn phù hợp nhất:
+5. expiry_date: Ngày hết hiệu lực (nếu có ghi trong văn bản) theo định dạng YYYY-MM-DD, nếu không có để chuỗi rỗng.
+6. is_permanent: true nếu không có ngày hết hạn cụ thể, false nếu có ngày hết hạn.
+7. scope_domain: Lựa chọn 1 trong các mã chuyên môn phù hợp nhất:
    - "VB_PHAP_LUAT" (Văn bản pháp luật, Luật, Nghị định, Thông tư của Nhà nước/Bộ)
    - "QL_KY_THUAT" (Quản lý kỹ thuật CNS, Selex, radar, đài trạm, thiết bị kỹ thuật)
    - "SMS" (An toàn hàng không, quản lý an toàn SMS)
@@ -71,7 +84,7 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) của tài liệu đính k
    - "PCTT_TKCN" (Phòng chống thiên tai và Tìm kiếm cứu nạn)
    - "ATVSLD" (An toàn vệ sinh lao động, bảo hộ lao động)
    - "CONG_TRINH_HK" (Công trình hàng không, đài trạm xây dựng)
-6. doc_type: Lựa chọn 1 trong các mã loại văn bản:
+8. doc_type: Lựa chọn 1 trong các mã loại văn bản:
    - "QUY_TRINH_HDCV" (Hướng dẫn công việc, quy trình SOP)
    - "QUY_DINH_QUY_CHE" (Quy định, quy chế, quyết định nội bộ)
    - "BAO_CAO" (Báo cáo kỹ thuật, báo cáo định kỳ)
@@ -99,7 +112,7 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) của tài liệu đính k
       ],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 350,
+        maxOutputTokens: 400,
         responseMimeType: 'application/json',
         responseSchema: {
           type: 'OBJECT',
@@ -108,6 +121,8 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) của tài liệu đính k
             document_code: { type: 'STRING' },
             issuing_authority: { type: 'STRING' },
             issue_date: { type: 'STRING' },
+            expiry_date: { type: 'STRING' },
+            is_permanent: { type: 'BOOLEAN' },
             scope_domain: {
               type: 'STRING',
               enum: [
@@ -168,6 +183,8 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) của tài liệu đính k
         document_code: parsed.document_code || '',
         issuing_authority: parsed.issuing_authority || '',
         issue_date: parsed.issue_date || '',
+        expiry_date: parsed.expiry_date || '',
+        is_permanent: Boolean(parsed.is_permanent),
         scope_domain: parsed.scope_domain || 'VB_PHAP_LUAT',
         doc_type: parsed.doc_type || 'QUY_TRINH_HDCV',
       },
