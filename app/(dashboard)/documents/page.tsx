@@ -373,42 +373,41 @@ function DocumentsContent() {
 
           {/* Right Action Tools */}
           <div className="flex items-center gap-2.5 ml-auto">
-            {/* Trạng thái Google Drive & Supabase */}
-            <div className="hidden lg:flex items-center gap-2 mr-1">
-              <div className="flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
-                <Cloud className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                <span className="text-slate-600 font-medium">Drive:</span>
-                <span className="text-emerald-600 font-bold font-mono">Synced</span>
-              </div>
-              <div className="flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
-                <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span className="text-slate-600 font-medium">Supabase:</span>
-                <span className="text-emerald-600 font-bold font-mono">Ready</span>
+            {/* Trạng thái Google Drive dạng mờ Glassmorphism (bỏ Supabase Ready) */}
+            <div className="hidden lg:flex items-center mr-1">
+              <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-white/30 text-xs text-white shadow-xs drop-shadow-2xs">
+                <span className="p-0.5 rounded bg-white/20 border border-white/30">
+                  <Cloud className="w-3.5 h-3.5 text-white" />
+                </span>
+                <span className="text-sky-100 font-medium">Drive:</span>
+                <span className="text-emerald-300 font-bold font-mono">Synced</span>
               </div>
             </div>
 
-            {/* Admin Quét Drive Nhanh (Chỉ hiển thị cho Admin) */}
+            {/* Admin Quét Drive Nhanh (Dạng mờ Glassmorphism) */}
             {isAdmin && (
               <button
                 onClick={handleScanDrive}
                 disabled={isScanningDrive}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-white border border-white text-slate-800 hover:text-sky-900 rounded-lg text-xs font-semibold transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/50 text-white rounded-lg text-xs font-semibold transition-all backdrop-blur-md shadow-xs disabled:opacity-50 cursor-pointer drop-shadow-2xs"
                 title="Admin: Kích hoạt n8n quét và kiểm tra sự tồn tại của toàn bộ file trên Google Drive"
               >
-                {isScanningDrive ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                ) : (
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                )}
+                <span className="p-0.5 rounded bg-white/20 border border-white/30">
+                  {isScanningDrive ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-200" />
+                  ) : (
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-200" />
+                  )}
+                </span>
                 <span className="hidden sm:inline">{isScanningDrive ? 'Đang quét...' : 'Quét Drive'}</span>
               </button>
             )}
 
-            {/* Refresh button */}
+            {/* Refresh button (Glassmorphism) */}
             <button
               onClick={fetchDocuments}
               disabled={isLoading}
-              className="p-2 bg-white/95 hover:bg-white border border-white text-slate-700 hover:text-sky-700 rounded-lg transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+              className="p-2 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/50 text-white rounded-lg transition-colors backdrop-blur-md shadow-xs disabled:opacity-50 cursor-pointer drop-shadow-2xs"
               title="Làm mới danh sách"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />

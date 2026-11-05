@@ -380,21 +380,18 @@ export default function TrainingRecordsPage() {
           </div>
 
           <div className="flex items-center gap-2.5 ml-auto">
-            <div className="hidden md:flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
-              <Upload className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-              <span className="text-slate-600 font-medium">Drive:</span>
-              <span className="text-sky-700 font-bold font-mono">01_GIẤY PHÉP-CHỨNG CHỈ/01_CHỨNG CHỈ</span>
-            </div>
-            <div className="hidden sm:flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
-              <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span className="text-slate-600 font-medium">Supabase:</span>
-              <span className="text-emerald-600 font-bold font-mono">Ready</span>
+            <div className="hidden md:flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-white/30 text-xs text-white shadow-xs drop-shadow-2xs">
+              <span className="p-0.5 rounded bg-white/20 border border-white/30">
+                <Upload className="w-3.5 h-3.5 text-white" />
+              </span>
+              <span className="text-sky-100 font-medium">Drive:</span>
+              <span className="text-white font-bold font-mono">01_CHỨNG CHỈ</span>
             </div>
 
             <button
               onClick={fetchTrainingRecords}
               disabled={isLoading}
-              className="p-2 bg-white/95 hover:bg-white border border-white text-slate-700 hover:text-sky-700 rounded-lg transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+              className="p-2 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/50 text-white rounded-lg transition-colors backdrop-blur-md shadow-xs disabled:opacity-50 cursor-pointer drop-shadow-2xs"
               title="Làm mới danh sách"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />

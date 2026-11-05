@@ -27,23 +27,25 @@ export default function NavItem({ href, icon, label, dept }: NavItemProps) {
       aria-current={isActive ? 'page' : undefined}
       className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all group relative text-sm ${
         isActive
-          ? 'bg-white text-sky-900 font-bold shadow-md shadow-sky-900/10 ring-1 ring-white'
-          : 'text-white font-semibold hover:bg-white/25 hover:text-white backdrop-blur-[1px]'
+          ? 'bg-white/90 text-sky-950 font-bold shadow-md backdrop-blur-md border border-white'
+          : 'text-white font-medium hover:bg-white/20 hover:text-white backdrop-blur-sm border border-transparent hover:border-white/20'
       }`}
     >
       <div
-        className={`transition-colors ${
-          isActive ? 'text-[#0284c7]' : 'text-sky-100 group-hover:text-white'
+        className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+          isActive
+            ? 'bg-sky-600 text-white shadow-2xs'
+            : 'bg-white/20 backdrop-blur-md border border-white/30 text-white shadow-2xs group-hover:bg-white/30 group-hover:border-white/50'
         }`}
       >
         {icon}
       </div>
-      <span className={isActive ? '' : 'drop-shadow-[0_1px_1px_rgba(3,105,161,0.35)]'}>
+      <span className={isActive ? '' : 'drop-shadow-2xs'}>
         {label}
       </span>
       <div
         className={`absolute left-0 top-1/2 -translate-y-1/2 w-1.5 bg-[#ef2323] rounded-r-full transition-all duration-300 ${
-          isActive ? 'h-3/5' : 'h-0 group-hover:h-1/2 bg-white'
+          isActive ? 'h-3/5' : 'h-0 group-hover:h-1/2 bg-white/80'
         }`}
       />
     </Link>

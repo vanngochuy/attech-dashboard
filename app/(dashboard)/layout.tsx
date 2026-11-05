@@ -62,17 +62,17 @@ export default function DashboardLayout({
               <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white/50 to-transparent" />
             </div>
 
-            {/* Cụm Logo ATTECH trên nền kính mây trắng nổi bật */}
-            <div className="h-14 flex items-center px-5 border-b border-white/25 bg-white/15 backdrop-blur-xs relative z-10">
-              <div className="flex items-center gap-2.5 bg-white/95 px-3.5 py-1.5 rounded-xl shadow-sm border border-white">
+            {/* Cụm Logo ATTECH dạng mờ Glassmorphism (bỏ nền trắng) */}
+            <div className="h-14 flex items-center px-5 border-b border-white/20 bg-white/10 backdrop-blur-md relative z-10">
+              <div className="flex items-center gap-2.5 bg-white/20 hover:bg-white/25 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/35 shadow-xs transition-all">
                 <img
                   src="/attech-logo.png"
                   alt="ATTECH Logo"
-                  className="w-7 h-7 rounded-full object-contain shrink-0"
+                  className="w-7 h-7 rounded-full object-contain shrink-0 drop-shadow-xs"
                 />
-                <span className="font-extrabold text-lg tracking-wider select-none">
+                <span className="font-extrabold text-lg tracking-wider select-none drop-shadow-2xs">
                   <span className="text-[#ef2323]">A</span>
-                  <span className="text-[#0284c7]">TTECH</span>
+                  <span className="text-white">TTECH</span>
                 </span>
               </div>
             </div>

@@ -698,20 +698,22 @@ export default function EmailDocumentTasksPage() {
               </div>
             )}
 
-            <div className="hidden md:flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
-              <MailSearch className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-              <span className="text-slate-600 font-medium">Hộp thư:</span>
-              <span className="text-sky-700 font-bold font-mono">tuh@attech.com.vn</span>
+            <div className="hidden md:flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-white/30 text-xs text-white shadow-xs drop-shadow-2xs">
+              <span className="p-0.5 rounded bg-white/20 border border-white/30">
+                <MailSearch className="w-3.5 h-3.5 text-white" />
+              </span>
+              <span className="text-sky-100 font-medium">Hộp thư:</span>
+              <span className="text-white font-bold font-mono">tuh@attech.com.vn</span>
             </div>
 
-            {/* Nút Quét Email & Đối chiếu thường */}
+            {/* Nút Quét Email & Đối chiếu thường (Glassmorphism) */}
             <button
               onClick={handleScanEmailsByDateRange}
               disabled={isScanning}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-white text-slate-800 hover:text-sky-700 border border-white rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer disabled:opacity-60"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white hover:text-white border border-white/30 hover:border-white/50 rounded-lg text-xs font-semibold transition-all backdrop-blur-md shadow-xs cursor-pointer disabled:opacity-60 drop-shadow-2xs"
               title="Quét Email theo khoảng thời gian và đối chiếu với kho Tài liệu chính thức"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-sky-600 ${isScanning ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 text-white ${isScanning ? 'animate-spin' : ''}`} />
               <span>{isScanning ? 'Đang quét...' : 'Quét Email & Đối chiếu'}</span>
             </button>
 
