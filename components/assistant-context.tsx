@@ -31,8 +31,6 @@ interface AssistantContextValue {
   setPreviewFileId: (id: string | null) => void;
 }
 
-const MAX_SELECTED = 2;
-
 const AssistantContext = createContext<AssistantContextValue | null>(null);
 
 export function AssistantProvider({ children }: { children: React.ReactNode }) {
@@ -53,10 +51,6 @@ export function AssistantProvider({ children }: { children: React.ReactNode }) {
       if (prev.includes(id)) {
         return prev.filter((item) => item !== id);
       }
-      if (prev.length >= MAX_SELECTED) {
-        // Nếu đã chọn đủ 2 file, thay thế file cũ nhất bằng file mới
-        return [prev[1], id];
-      }
       return [...prev, id];
     });
   }, []);
@@ -64,7 +58,6 @@ export function AssistantProvider({ children }: { children: React.ReactNode }) {
   const selectAndAskDoc = useCallback((id: string) => {
     setSelectedDocIds((prev) => {
       if (prev.includes(id)) return prev;
-      if (prev.length >= MAX_SELECTED) return [prev[1], id];
       return [...prev, id];
     });
     setIsOpen(true);

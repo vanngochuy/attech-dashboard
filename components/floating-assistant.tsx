@@ -37,6 +37,105 @@ function renderInline(text: string) {
   );
 }
 
+export function AnimatedChatbotIcon({ className = 'w-14 h-14' }: { className?: string }) {
+  return (
+    <div className={`relative select-none ${className}`}>
+      <style>{`
+        @keyframes botEyeMoveAndBlink {
+          0%, 14% { transform: translate(0px, 0px) scaleY(1); }
+          16% { transform: translate(0px, 0px) scaleY(0.08); }
+          18%, 34% { transform: translate(-6px, -1px) scaleY(1); }
+          38%, 54% { transform: translate(6px, -1px) scaleY(1); }
+          56% { transform: translate(6px, 0px) scaleY(0.08); }
+          58%, 74% { transform: translate(0px, 2px) scaleY(1); }
+          76% { transform: translate(0px, 0px) scaleY(0.08); }
+          78% { transform: translate(0px, 0px) scaleY(1); }
+          80% { transform: translate(0px, 0px) scaleY(0.08); }
+          82%, 100% { transform: translate(0px, 0px) scaleY(1); }
+        }
+        @keyframes botSpeechDotBounce {
+          0%, 60%, 100% { transform: translateY(0px) scale(1); opacity: 0.85; }
+          30% { transform: translateY(-9px) scale(1.14); opacity: 1; }
+        }
+        .bot-eye-anim {
+          transform-box: fill-box;
+          transform-origin: center center;
+          animation: botEyeMoveAndBlink 5.2s ease-in-out infinite;
+        }
+        .bot-dot-1 {
+          transform-box: fill-box;
+          transform-origin: center center;
+          animation: botSpeechDotBounce 1.35s ease-in-out infinite;
+          animation-delay: 0s;
+        }
+        .bot-dot-2 {
+          transform-box: fill-box;
+          transform-origin: center center;
+          animation: botSpeechDotBounce 1.35s ease-in-out infinite;
+          animation-delay: 0.22s;
+        }
+        .bot-dot-3 {
+          transform-box: fill-box;
+          transform-origin: center center;
+          animation: botSpeechDotBounce 1.35s ease-in-out infinite;
+          animation-delay: 0.44s;
+        }
+      `}</style>
+      <svg
+        viewBox="30 60 390 340"
+        className="w-full h-full overflow-visible drop-shadow-[0_6px_14px_rgba(2,132,199,0.35)]"
+      >
+        <defs>
+          <radialGradient id="botDot3D" cx="35%" cy="30%" r="70%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="65%" stopColor="#e2e8f0" />
+            <stop offset="100%" stopColor="#cbd5e1" />
+          </radialGradient>
+          <filter id="cyanEyeGlow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* Lớp nền Robot 3D đã xử lý sạch vùng mắt & dấu ... */}
+        <image href="/chatbot-base.png" x="0" y="0" width="450" height="450" />
+
+        {/* Hai mắt Cyan phát sáng có cử động liếc & chớp mắt */}
+        <g filter="url(#cyanEyeGlow)">
+          <rect
+            className="bot-eye-anim"
+            x="142"
+            y="238"
+            width="43"
+            height="45"
+            rx="16"
+            fill="#2be4ff"
+          />
+          <rect
+            className="bot-eye-anim"
+            x="222"
+            y="238"
+            width="41"
+            height="45"
+            rx="16"
+            fill="#2be4ff"
+          />
+        </g>
+
+        {/* Ba dấu chấm (...) 3D nhảy sóng trong bong bóng thoại */}
+        <g style={{ filter: 'drop-shadow(0px 3px 3px rgba(2, 70, 130, 0.35))' }}>
+          <circle className="bot-dot-1" cx="280.5" cy="139" r="14" fill="url(#botDot3D)" />
+          <circle className="bot-dot-2" cx="321.5" cy="139" r="14" fill="url(#botDot3D)" />
+          <circle className="bot-dot-3" cx="361.5" cy="139" r="14" fill="url(#botDot3D)" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 export default function FloatingAssistant() {
   const {
     docs,
@@ -59,6 +158,36 @@ export default function FloatingAssistant() {
   const [ocrTargetDocId, setOcrTargetDocId] = useState<string | null>(null);
   const ocrFileInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const chatWindowRef = useRef<HTMLDivElement>(null);
+  const launcherBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Tự động thu nhỏ chatbot khi nhấn ra ngoài khu vực hỏi đáp
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      // Không đóng nếu nhấn bên trong cửa sổ chat hoặc nút mở chatbot
+      if (chatWindowRef.current?.contains(target)) return;
+      if (launcherBtnRef.current?.contains(target)) return;
+      if (ocrFileInputRef.current?.contains(target)) return;
+
+      // Không đóng nếu đang nhấn nút "Hỏi AI" trên dòng văn bản hoặc đang mở cửa sổ xem trước PDF
+      if (target.closest('[data-assistant-trigger="true"]')) return;
+      if (previewFileId) return;
+
+      setIsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [isOpen, previewFileId, setIsOpen]);
 
   const docList = docs || [];
   const selectedDocs: AssistantDoc[] = selectedDocIds
@@ -86,21 +215,21 @@ export default function FloatingAssistant() {
       .filter((d): d is AssistantDoc => !!d);
   };
 
-  // Gợi ý câu hỏi thông minh tùy theo số lượng văn bản đang chọn (0, 1 hoặc 2 file)
+  // Gợi ý câu hỏi thông minh tùy theo số lượng văn bản đang chọn
   const suggestions =
-    selectedDocs.length === 2
+    selectedDocs.length >= 2
       ? [
-          'So sánh điểm giống và khác nhau giữa 2 văn bản này',
-          'Tóm tắt nội dung chính của từng văn bản',
-          'Đối tượng áp dụng và trách nhiệm thực hiện của 2 văn bản khác nhau thế nào?',
-        ]
+        'So sánh điểm giống và khác nhau giữa các văn bản đã chọn',
+        'Tóm tắt nội dung chính của từng văn bản',
+        'Đối tượng áp dụng và trách nhiệm thực hiện của các văn bản khác nhau thế nào?',
+      ]
       : selectedDocs.length === 1
-      ? [
+        ? [
           'Tóm tắt nội dung cốt lõi của văn bản này',
           'Các quy định, nhiệm vụ hoặc điều khoản chính là gì?',
           'Đơn vị, cá nhân nào chịu trách nhiệm thi hành?',
         ]
-      : [
+        : [
           'Liệt kê các văn bản đang hiển thị',
           'Văn bản nào được ban hành mới nhất?',
           'Những văn bản nào đang còn hiệu lực?',
@@ -157,10 +286,10 @@ export default function FloatingAssistant() {
         <div>
           <div className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
             <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Nguồn tài liệu ({selectedDocIds.length}/2)</span>
+            <span>Nguồn tài liệu ({selectedDocIds.length})</span>
           </div>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            Tích chọn tối đa 2 văn bản để AI đọc toàn văn
+            Tích chọn văn bản để AI đọc toàn văn
           </p>
         </div>
         {selectedDocIds.length > 0 && (
@@ -188,11 +317,10 @@ export default function FloatingAssistant() {
               <div
                 key={d.id}
                 onClick={() => toggleSelectDoc(d.id)}
-                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${
-                  isSelected
-                    ? 'bg-indigo-50/80 border-indigo-300 shadow-xs'
-                    : 'bg-white hover:bg-slate-50 border-slate-200/80'
-                }`}
+                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${isSelected
+                  ? 'bg-indigo-50/80 border-indigo-300 shadow-xs'
+                  : 'bg-white hover:bg-slate-50 border-slate-200/80'
+                  }`}
               >
                 <div className="mt-0.5 text-indigo-600 shrink-0">
                   {isSelected ? (
@@ -281,6 +409,7 @@ export default function FloatingAssistant() {
 
       {isOpen && (
         <div
+          ref={chatWindowRef}
           className={
             isExpanded
               ? 'fixed inset-4 sm:inset-8 z-40 bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200'
@@ -290,15 +419,15 @@ export default function FloatingAssistant() {
           {/* Thanh tiêu đề */}
           <div className="flex items-center justify-between px-4 py-3 bg-indigo-600 text-white shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                <Bot className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center shrink-0 p-0.5">
+                <AnimatedChatbotIcon className="w-8 h-8" />
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-bold leading-tight flex items-center gap-2">
                   <span>Trợ lý ATTECH Notebook</span>
                   {selectedDocs.length > 0 && (
                     <span className="text-[10px] font-mono bg-emerald-400 text-slate-950 font-bold px-2 py-0.5 rounded-full">
-                      Đọc sâu {selectedDocs.length}/2 file
+                      Đọc sâu {selectedDocs.length} file
                     </span>
                   )}
                 </div>
@@ -312,13 +441,12 @@ export default function FloatingAssistant() {
               {!isExpanded && docs && (
                 <button
                   onClick={() => setShowSourcePicker((v) => !v)}
-                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-colors ${
-                    showSourcePicker ? 'bg-white text-indigo-700' : 'bg-white/15 hover:bg-white/25 text-white'
-                  }`}
-                  title="Chọn 1–2 văn bản để đọc sâu"
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-colors ${showSourcePicker ? 'bg-white text-indigo-700' : 'bg-white/15 hover:bg-white/25 text-white'
+                    }`}
+                  title="Chọn văn bản nguồn để đọc sâu"
                 >
                   <BookOpen className="w-3.5 h-3.5" />
-                  <span>Nguồn ({selectedDocs.length}/2)</span>
+                  <span>Nguồn ({selectedDocs.length})</span>
                 </button>
               )}
               {messages.length > 0 && (
@@ -420,19 +548,19 @@ export default function FloatingAssistant() {
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {messages.length === 0 ? (
                       <div className="flex flex-col items-center text-center pt-4">
-                        <div className="w-12 h-12 rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center mb-2.5">
-                          <Sparkles className="w-6 h-6 text-indigo-600" />
+                        <div className="mb-2">
+                          <AnimatedChatbotIcon className="w-16 h-16" />
                         </div>
                         <h4 className="text-sm font-bold text-slate-900">
                           {selectedDocs.length > 0
                             ? `Sẵn sàng phân tích ${selectedDocs.length} văn bản đã chọn`
-                            : 'Trợ lý Tài liệu ATTECH (Kiểu NotebookLM)'}
+                            : 'Trợ lý Tài liệu ATTECH'}
                         </h4>
-                        <p className="text-xs text-slate-600 mt-1 max-w-md leading-relaxed">
-                          {selectedDocs.length > 0
-                            ? 'AI sẽ đọc trực tiếp toàn bộ nội dung chữ (OCR) đã lưu trên Supabase của văn bản được chọn và trích dẫn chính xác từng trang.'
-                            : 'Bấm nút "🤖 Hỏi AI" trên bất kỳ văn bản nào (tối đa 2 file cùng lúc) để hỏi sâu điều khoản bên trong, hoặc hỏi tổng quan danh sách dưới đây:'}
-                        </p>
+                        {selectedDocs.length > 0 && (
+                          <p className="text-xs text-slate-600 mt-1 max-w-md leading-relaxed">
+                            AI sẽ đọc trực tiếp toàn bộ nội dung chữ (OCR) đã lưu trên Supabase của văn bản được chọn và trích dẫn chính xác từng trang.
+                          </p>
+                        )}
 
                         <div className="mt-4 flex flex-col gap-2 w-full max-w-md">
                           {suggestions.map((s) => (
@@ -460,11 +588,10 @@ export default function FloatingAssistant() {
                               </div>
                             )}
                             <div
-                              className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed shadow-xs ${
-                                m.role === 'user'
-                                  ? 'bg-indigo-600 text-white rounded-tr-sm'
-                                  : 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm'
-                              }`}
+                              className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed shadow-xs ${m.role === 'user'
+                                ? 'bg-indigo-600 text-white rounded-tr-sm'
+                                : 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm'
+                                }`}
                             >
                               {m.content.split('\n').map((line, i) => (
                                 <p key={i} className="mb-1.5 last:mb-0 break-words">
@@ -536,7 +663,7 @@ export default function FloatingAssistant() {
                       placeholder={
                         selectedDocs.length > 0
                           ? `Hỏi chi tiết về ${selectedDocs.length} văn bản đang chọn...`
-                          : 'Hỏi về danh sách văn bản hoặc chọn 1–2 file để đọc sâu...'
+                          : 'Nhập câu hỏi ...'
                       }
                       className="flex-1 bg-slate-100 border border-slate-200 focus:bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 rounded-full px-4 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all"
                     />
@@ -555,24 +682,19 @@ export default function FloatingAssistant() {
         </div>
       )}
 
-      {/* Nút Robot nổi góc phải dưới */}
+      {/* Nút Robot 3D nổi góc phải dưới */}
       <button
+        ref={launcherBtnRef}
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full flex items-center justify-center text-white shadow-xl transition-all active:scale-95 ${
-          isOpen
-            ? 'bg-slate-700 hover:bg-slate-800'
-            : 'bg-indigo-600 hover:bg-indigo-700 hover:scale-105 shadow-indigo-600/40'
-        }`}
-        title={isOpen ? 'Đóng trợ lý' : 'Mở trợ lý AI'}
+        className="fixed bottom-5 right-5 z-40 w-[74px] h-[74px] rounded-full flex items-center justify-center transition-transform duration-200 hover:scale-110 active:scale-95 focus:outline-none group"
+        title={isOpen ? 'Thu nhỏ trợ lý AI' : 'Mở trợ lý AI'}
         aria-label="Trợ lý AI"
       >
-        {isOpen ? <X className="w-6 h-6" /> : <Bot className="w-7 h-7" />}
-        {!isOpen && selectedDocIds.length > 0 ? (
-          <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
+        <AnimatedChatbotIcon className="w-[74px] h-[74px]" />
+        {selectedDocIds.length > 0 && (
+          <span className="absolute top-0 right-0 min-w-5 h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-sm">
             {selectedDocIds.length}
           </span>
-        ) : (
-          !isOpen && <span className="absolute top-1 right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-white" />
         )}
       </button>
 

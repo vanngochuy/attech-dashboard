@@ -5,7 +5,6 @@ import { getSupabaseAdminClient, isSupabaseAdminConfigured, cleanEnv } from '@/l
 export const maxDuration = 30;
 
 const MAX_LIST_DOCS = 100;
-const MAX_SELECTED_DOCS = 2;
 const MAX_OCR_CHARS_PER_DOC = 45000; // Giới hạn an toàn ~10k-12k token mỗi văn bản để bảo vệ Free Tier
 
 export async function POST(req: Request) {
@@ -18,11 +17,9 @@ export async function POST(req: Request) {
 
     // 2. Danh sách văn bản đang lọc trên màn hình (Metadata nhẹ)
     const docs: any[] = Array.isArray(documents) ? documents.slice(0, MAX_LIST_DOCS) : [];
-    const pinnedIds: string[] = Array.isArray(selectedDocIds)
-      ? selectedDocIds.slice(0, MAX_SELECTED_DOCS)
-      : [];
+    const pinnedIds: string[] = Array.isArray(selectedDocIds) ? selectedDocIds : [];
 
-    // 3. Nếu người dùng tích chọn 1-2 văn bản (chế độ NotebookLM), lấy toàn văn ocr_content từ Supabase
+    // 3. Nếu người dùng tích chọn văn bản (chế độ NotebookLM), lấy toàn văn ocr_content từ Supabase
     let deepDocsContext = '';
     if (pinnedIds.length > 0 && isSupabaseAdminConfigured()) {
       const supabase = getSupabaseAdminClient();
@@ -79,7 +76,7 @@ ${
     const systemPrompt = `Bạn là Trợ lý ATTECH AI (hoạt động theo cơ chế Google NotebookLM nội bộ) của Công ty TNHH Kỹ thuật Quản lý bay (ATTECH).
 
 PHẠM VI BỘ LỌC HIỆN TẠI TRÊN WEB: ${scopeLabel || 'Tất cả chuyên môn'} (${docs.length} văn bản).
-SỐ VĂN BẢN ĐANG ĐƯỢC TÍCH CHỌN ĐỂ ĐỌC SÂU: ${pinnedIds.length}/${MAX_SELECTED_DOCS} văn bản.
+SỐ VĂN BẢN ĐANG ĐƯỢC TÍCH CHỌN ĐỂ ĐỌC SÂU: ${pinnedIds.length} văn bản.
 
 ${
   deepDocsContext
@@ -93,7 +90,7 @@ QUY TẮC TRẢ LỜI BẮT BUỘC (CHUẨN NOTEBOOKLM):
 2. TRÍCH DẪN NGUỒN & TRANG RÕ RÀNG:
    - Khi lấy thông tin từ văn bản nào, luôn ghi rõ mã định danh \`[DOC-XXXXXX]\` kèm Số hiệu và số Trang (ví dụ: *Theo Quyết định 750/QĐ-KTQLB [DOC-DC5C9D], Trang 2*).
 3. CẢNH BÁO HIỆU LỰC: Nếu người dùng hỏi về một văn bản có trạng thái "ĐÃ HẾT HIỆU LỰC", bạn PHẢI cảnh báo rõ ở đầu câu trả lời rằng văn bản này đã hết hiệu lực / đã bị thay thế.
-4. KHI CHƯA CHỌN VĂN BẢN ĐỂ ĐỌC SÂU: Nếu người dùng hỏi chi tiết điều khoản bên trong mà chưa tích chọn văn bản đó (hoặc văn bản đó chưa có nội dung OCR), hãy hướng dẫn họ bấm tích chọn văn bản đó (tối đa 2 văn bản cùng lúc) ở cột Nguồn tài liệu để bạn đọc toàn văn.
+4. KHI CHƯA CHỌN VĂN BẢN ĐỂ ĐỌC SÂU: Nếu người dùng hỏi chi tiết điều khoản bên trong mà chưa tích chọn văn bản đó (hoặc văn bản đó chưa có nội dung OCR), hãy hướng dẫn họ bấm tích chọn văn bản đó ở mục Nguồn tài liệu để bạn đọc toàn văn.
 5. Trình bày ngắn gọn, rõ ràng bằng tiếng Việt, dùng gạch đầu dòng hoặc bảng so sánh dễ nhìn.`;
 
     const result = streamText({

@@ -672,6 +672,7 @@ function DocumentsContent() {
                               onClick={(e) => e.stopPropagation()}
                             >
                               <button
+                                data-assistant-trigger="true"
                                 onClick={() => selectAndAskDoc(doc.id)}
                                 className={`p-1.5 rounded transition-colors ${
                                   selectedDocIds.includes(doc.id)
@@ -785,6 +786,7 @@ function DocumentsContent() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
+                            data-assistant-trigger="true"
                             onClick={() => selectAndAskDoc(doc.id)}
                             className={`p-1 rounded transition-colors ${
                               selectedDocIds.includes(doc.id)

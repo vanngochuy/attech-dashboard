@@ -813,7 +813,7 @@ export function SidebarUserStatus() {
           title="Đăng xuất & Hạ cánh về màn hình chính"
         >
           <PlaneLanding className="w-3.5 h-3.5 text-rose-600" />
-          <span>Đăng xuất (Hạ cánh)</span>
+          <span>Đăng xuất</span>
         </button>
       </div>
     );
