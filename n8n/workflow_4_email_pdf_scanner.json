@@ -1,0 +1,138 @@
+{
+  "id": "CNLUQWWnkPHYRTRB",
+  "name": "ATTECH - API: Email PDF Scanner to 03_TAI_LIEU_CHUA_XAC_THUC",
+  "active": false,
+  "nodes": [
+    {
+      "id": "node-webhook-email-scan",
+      "name": "1. Webhook (Từ Tab Công việc)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [-480, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scan-email-pdf",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-gmail-get-many",
+      "name": "2. Quét Email theo khoảng thời gian (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [-240, 0],
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 20,
+        "simple": false,
+        "filters": {
+          "q": "={{ 'has:attachment filename:pdf' + ($json.body?.fromDate ? ' after:' + $json.body.fromDate.replace(/-/g, '/') : '') + ($json.body?.toDate ? ' before:' + $json.body.toDate.replace(/-/g, '/') : '') + ($json.body?.senderFilter ? ' from:' + $json.body.senderFilter : '') }}"
+        },
+        "options": {
+          "downloadAttachments": true,
+          "dataPropertyAttachmentsPrefixName": "attachment_"
+        }
+      }
+    },
+    {
+      "id": "node-code-filter-pdf",
+      "name": "3. Lọc riêng các file PDF đính kèm",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst pdfItems = [];\n\nfor (const item of items) {\n  const bin = item.binary || {};\n  const headers = item.json.payload?.headers || [];\n  const subjectHeader = headers.find((h) => h.name && h.name.toLowerCase() === 'subject');\n  const fromHeader = headers.find((h) => h.name && h.name.toLowerCase() === 'from');\n  const dateHeader = headers.find((h) => h.name && h.name.toLowerCase() === 'date');\n\n  const emailSubject = item.json.subject || (subjectHeader ? subjectHeader.value : 'Email có đính kèm PDF');\n  const senderEmail = (item.json.from && item.json.from.value && item.json.from.value[0] && item.json.from.value[0].address) || (fromHeader ? fromHeader.value : 'email@attech.com.vn');\n  const receivedDate = item.json.date\n    ? String(item.json.date).slice(0, 16).replace('T', ' ')\n    : (dateHeader ? dateHeader.value : new Date().toISOString().slice(0, 16).replace('T', ' '));\n\n  for (const key of Object.keys(bin)) {\n    const att = bin[key];\n    const fileName = att.fileName || 'tai_lieu_email.pdf';\n    const isPdf = att.mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');\n\n    if (isPdf) {\n      pdfItems.push({\n        json: {\n          hasPdf: true,\n          emailSubject,\n          senderEmail,\n          receivedDate,\n          pdfFileName: fileName,\n          extractedTitle: fileName.replace(/\\.pdf$/i, '').replace(/[_-]+/g, ' ').trim(),\n        },\n        binary: {\n          file: att,\n        },\n      });\n    }\n  }\n}\n\nif (pdfItems.length === 0) {\n  return [{ json: { hasPdf: false, items: [] } }];\n}\n\nreturn pdfItems;"
+      }
+    },
+    {
+      "id": "node-if-has-pdf",
+      "name": "4. Có file PDF đính kèm?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-has-pdf",
+              "leftValue": "={{ $json.hasPdf === true }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-drive-upload-unverified",
+      "name": "5. Lưu vào 03_TÀI LIỆU CHƯA XÁC THỰC",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [480, -80],
+      "parameters": {
+        "inputDataFieldName": "file",
+        "name": "={{ $json.pdfFileName }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1aejD_BWF9ZtclJ2WCDRW34myR9iAWxmz"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "o1SAcd4jFT5mUM1C",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "id": "node-code-aggregate-pdfs",
+      "name": "6. Tổng hợp danh sách PDF đã lưu",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, -80],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const uploaded = $input.all();\nconst sourceItems = $('3. Lọc riêng các file PDF đính kèm').all();\n\nconst resultItems = uploaded.map((u, idx) => {\n  const src = (sourceItems[idx] && sourceItems[idx].json) ? sourceItems[idx].json : {};\n  return {\n    emailSubject: src.emailSubject || u.json.name || 'Email đính kèm PDF',\n    senderEmail: src.senderEmail || 'email@attech.com.vn',\n    receivedDate: src.receivedDate || new Date().toISOString().slice(0, 16).replace('T', ' '),\n    pdfFileName: u.json.name || src.pdfFileName || 'document.pdf',\n    extractedTitle: src.extractedTitle || String(u.json.name || '').replace(/\\.pdf$/i, ''),\n    driveFileId: u.json.id || '',\n    fileUrl: u.json.webViewLink || (u.json.id ? 'https://drive.google.com/file/d/' + u.json.id + '/view' : ''),\n    driveFolderName: 'ATTECH_DOCUMENTS/03_TÀI LIỆU CHƯA XÁC THỰC',\n  };\n});\n\nreturn [{ json: { success: true, count: resultItems.length, items: resultItems } }];"
+      }
+    },
+    {
+      "id": "node-respond-email-scan",
+      "name": "7. Phản hồi kết quả về Tab Công việc",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 0],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, items: $json.items || [] } }}",
+        "options": {}
+      }
+    }
+  ]
+}

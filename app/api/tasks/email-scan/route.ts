@@ -224,8 +224,10 @@ export async function POST(req: Request) {
 
     // 2. Hành động: Quét Email theo khoảng thời gian (Từ ngày - Đến ngày) và đối chiếu lại toàn bộ với bảng `document_files` thật trên Supabase
     if (action === 'SCAN_DATE_RANGE') {
-      // Nếu có cấu hình N8N_EMAIL_SCAN_WEBHOOK_URL thì gọi thêm n8n để kéo PDF mới từ hộp thư Gmail/IMAP
-      const n8nEmailWebhook = cleanEnv(process.env.N8N_EMAIL_SCAN_WEBHOOK_URL);
+      // Gọi luồng n8n `ATTECH - API: Email PDF Scanner to 03_TAI_LIEU_CHUA_XAC_THUC` (ID: CNLUQWWnkPHYRTRB)
+      const n8nEmailWebhook =
+        cleanEnv(process.env.N8N_EMAIL_SCAN_WEBHOOK_URL) ||
+        'http://localhost:5678/webhook/scan-email-pdf';
       let n8nFetchedCount = 0;
 
       if (n8nEmailWebhook) {
