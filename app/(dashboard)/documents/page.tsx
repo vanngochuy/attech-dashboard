@@ -44,6 +44,7 @@ import { DocumentPreviewModal } from '@/components/document-preview-modal';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { abbreviateIssuer } from '@/lib/issuer';
 import { useAssistant } from '@/components/assistant-context';
+import { useAuth } from '@/components/auth-context';
 
 // Danh mục Chuyên môn
 const DEPARTMENTS = [
@@ -69,6 +70,7 @@ function DocumentsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setDocsContext, selectedDocIds, selectAndAskDoc } = useAssistant();
+  const { isAdmin } = useAuth();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<any | null>(null);
   const [previewDoc, setPreviewDoc] = useState<string | null>(null);
@@ -83,7 +85,7 @@ function DocumentsContent() {
   );
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUPERSEDED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [filterMissingOnly, setFilterMissingOnly] = useState(false);
 
   // Trạng thái Quét trực tiếp Google Drive cho Admin
@@ -261,20 +263,22 @@ function DocumentsContent() {
             </span>
           </div>
 
-          {/* Admin Quét Drive Nhanh */}
-          <button
-            onClick={handleScanDrive}
-            disabled={isScanningDrive}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-medium transition-all shadow-xs disabled:opacity-50"
-            title="Admin: Kích hoạt n8n quét và kiểm tra sự tồn tại của toàn bộ file trên Google Drive"
-          >
-            {isScanningDrive ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
-            ) : (
-              <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-            )}
-            <span className="hidden sm:inline">{isScanningDrive ? 'Đang quét...' : 'Quét Drive'}</span>
-          </button>
+          {/* Admin Quét Drive Nhanh (Chỉ hiển thị cho Admin) */}
+          {isAdmin && (
+            <button
+              onClick={handleScanDrive}
+              disabled={isScanningDrive}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-medium transition-all shadow-xs disabled:opacity-50"
+              title="Admin: Kích hoạt n8n quét và kiểm tra sự tồn tại của toàn bộ file trên Google Drive"
+            >
+              {isScanningDrive ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+              ) : (
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+              )}
+              <span className="hidden sm:inline">{isScanningDrive ? 'Đang quét...' : 'Quét Drive'}</span>
+            </button>
+          )}
 
           {/* Refresh button */}
           <button
@@ -306,15 +310,17 @@ function DocumentsContent() {
             </button>
           </div>
 
-          {/* New Document Button */}
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-xs font-semibold transition-all shadow-sm shadow-indigo-600/30"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Thêm tài liệu</span>
-            <span className="text-[10px] text-indigo-200 font-mono ml-0.5">C</span>
-          </button>
+          {/* New Document Button (Chỉ hiển thị cho Admin) */}
+          {isAdmin && (
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-xs font-semibold transition-all shadow-sm shadow-indigo-600/30"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Thêm tài liệu</span>
+              <span className="text-[10px] text-indigo-200 font-mono ml-0.5">C</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -381,8 +387,8 @@ function DocumentsContent() {
         </div>
       )}
 
-      {/* Cảnh báo nếu phát hiện file bị mất trên Google Drive */}
-      {missingDriveCount > 0 && (
+      {/* Cảnh báo nếu phát hiện file bị mất trên Google Drive (Chỉ hiển thị cho Admin) */}
+      {isAdmin && missingDriveCount > 0 && (
         <div className="mx-6 mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between text-xs text-amber-800 shrink-0 shadow-xs">
           <div className="flex items-center gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -535,7 +541,7 @@ function DocumentsContent() {
                             }`}
                           onClick={() => {
                             if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
-                            else setEditingDoc(doc);
+                            else if (isAdmin) setEditingDoc(doc);
                           }}
                         >
                           {/* Left: Icon + File Name */}
@@ -626,13 +632,15 @@ function DocumentsContent() {
                                   <Eye className="w-3.5 h-3.5" />
                                 </button>
                               )}
-                              <button
-                                onClick={() => setEditingDoc(doc)}
-                                className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
-                                title="Sửa metadata"
-                              >
-                                <SlidersHorizontal className="w-3.5 h-3.5" />
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  onClick={() => setEditingDoc(doc)}
+                                  className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
+                                  title="Sửa metadata (Admin)"
+                                >
+                                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               {!isMissingOnDrive && doc.drive_view_url && (
                                 <a
                                   href={doc.drive_view_url}
@@ -673,7 +681,7 @@ function DocumentsContent() {
                         } rounded-xl overflow-hidden transition-all group cursor-pointer flex flex-col justify-between shadow-xs`}
                       onClick={() => {
                         if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
-                        else setEditingDoc(doc);
+                        else if (isAdmin) setEditingDoc(doc);
                       }}
                     >
                       {/* 1. Header Khung: Icon + Tên tài liệu + Hiệu lực + Actions */}
@@ -737,13 +745,15 @@ function DocumentsContent() {
                               <Eye className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          <button
-                            onClick={() => setEditingDoc(doc)}
-                            className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-colors"
-                            title="Chỉnh sửa metadata"
-                          >
-                            <SlidersHorizontal className="w-3.5 h-3.5" />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => setEditingDoc(doc)}
+                              className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-colors"
+                              title="Chỉnh sửa metadata (Admin)"
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {!isMissingOnDrive && doc.drive_view_url && (
                             <a
                               href={doc.drive_view_url}
@@ -829,15 +839,17 @@ function DocumentsContent() {
         )}
       </div>
 
-      {/* Modal Thêm tài liệu mới */}
-      <UploadDocumentModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        onSuccess={fetchDocuments}
-      />
+      {/* Modal Thêm tài liệu mới (Chỉ dành cho Admin) */}
+      {isAdmin && (
+        <UploadDocumentModal
+          isOpen={isUploadModalOpen}
+          onClose={() => setIsUploadModalOpen(false)}
+          onSuccess={fetchDocuments}
+        />
+      )}
 
-      {/* Modal Chỉnh sửa metadata */}
-      {editingDoc && (
+      {/* Modal Chỉnh sửa metadata (Chỉ dành cho Admin) */}
+      {isAdmin && editingDoc && (
         <EditDocumentModal
           isOpen={!!editingDoc}
           document={editingDoc}

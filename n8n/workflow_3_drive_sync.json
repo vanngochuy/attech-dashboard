@@ -17,8 +17,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.4,
       "position": [
-        200,
-        200
+        -464,
+        -96
       ]
     },
     {
@@ -33,42 +33,41 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.2,
       "position": [
-        200,
-        380
+        -464,
+        96
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, file_name, drive_file_id FROM document_files WHERE drive_file_id IS NOT NULL LIMIT 500;"
+        "query": "SELECT id, file_name, drive_file_id FROM document_files WHERE drive_file_id IS NOT NULL LIMIT 500;",
+        "options": {}
       },
       "id": "pg-get-files",
       "name": "Lấy danh sách file (Supabase)1",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        450,
-        280
+        -208,
+        -16
       ]
     },
     {
       "parameters": {
-        "operation": "get",
-        "fileId": {
-          "__rl": true,
-          "value": "={{ $json.drive_file_id }}",
-          "mode": "id"
-        },
+        "method": "GET",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.drive_file_id }}?fields=id,name,trashed",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
         "options": {}
       },
       "id": "gdrive-check",
       "name": "Kiểm tra file trên Google Drive",
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
       "onError": "continueRegularOutput",
       "position": [
-        680,
-        280
+        16,
+        -16
       ]
     },
     {
@@ -77,12 +76,13 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 2
           },
           "conditions": [
             {
-              "id": "check-error",
-              "leftValue": "={{ $json.error !== undefined }}",
+              "id": "check-error-or-trashed",
+              "leftValue": "={{ $json.error !== undefined || $json.trashed === true }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -99,14 +99,14 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        900,
-        280
+        240,
+        -16
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE document_files\nSET sync_status = 'missing_on_drive'\nWHERE id = '{{ $('Lấy danh sách file (Supabase)1').item.json.id }}';\n",
+        "query": "=UPDATE document_files\nSET sync_status = 'missing_on_drive'\nWHERE id = '{{ $('Lấy danh sách file (Supabase)1').item.json.id }}';",
         "options": {}
       },
       "id": "pg-mark-warning",
@@ -114,8 +114,23 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        1120,
-        200
+        464,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE document_files\nSET sync_status = 'synced'\nWHERE id = '{{ $('Lấy danh sách file (Supabase)1').item.json.id }}'\n  AND sync_status != 'synced';",
+        "options": {}
+      },
+      "id": "pg-restore-synced",
+      "name": "Khôi phục trạng thái Hợp lệ (Supabase)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        464,
+        96
       ]
     },
     {
@@ -129,8 +144,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1120,
-        380
+        704,
+        0
       ]
     }
   ],
@@ -190,7 +205,7 @@
         ],
         [
           {
-            "node": "Phản hồi kết quả về Web",
+            "node": "Khôi phục trạng thái Hợp lệ (Supabase)",
             "type": "main",
             "index": 0
           }
@@ -198,6 +213,17 @@
       ]
     },
     "Đánh dấu Cảnh báo (Supabase)1": {
+      "main": [
+        [
+          {
+            "node": "Phản hồi kết quả về Web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Khôi phục trạng thái Hợp lệ (Supabase)": {
       "main": [
         [
           {

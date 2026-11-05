@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useAssistant, AssistantDoc } from '@/components/assistant-context';
 import { DocumentPreviewModal } from '@/components/document-preview-modal';
+import { useAuth } from '@/components/auth-context';
 
 function renderInline(text: string) {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
@@ -51,6 +52,7 @@ export default function FloatingAssistant() {
     previewFileId,
     setPreviewFileId,
   } = useAssistant();
+  const { isAdmin } = useAuth();
 
   const [showSourcePicker, setShowSourcePicker] = useState(false);
   const [ocrLoadingDocId, setOcrLoadingDocId] = useState<string | null>(null);
@@ -219,13 +221,13 @@ export default function FloatingAssistant() {
                       <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
                         <CheckCircle2 className="w-2.5 h-2.5" /> Đã có OCR
                       </span>
-                    ) : (
+                    ) : isAdmin ? (
                       <button
                         type="button"
                         onClick={(e) => handleTriggerOcrUpload(d.id, e)}
                         disabled={isOcrRunning}
                         className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 px-1.5 py-0.5 rounded border border-amber-300 transition-colors"
-                        title="Văn bản cũ chưa có chữ OCR. Bấm để chọn file PDF đọc OCR 1 lần lưu vào Supabase."
+                        title="Admin: Văn bản cũ chưa có chữ OCR. Bấm để chọn file PDF đọc OCR 1 lần lưu vào Supabase."
                       >
                         {isOcrRunning ? (
                           <>
@@ -237,6 +239,10 @@ export default function FloatingAssistant() {
                           </>
                         )}
                       </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                        Chưa có OCR
+                      </span>
                     )}
                   </div>
                 </div>

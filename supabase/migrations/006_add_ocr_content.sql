@@ -3,3 +3,4 @@
 
 ALTER TABLE public.document_files
 ADD COLUMN IF NOT EXISTS ocr_content TEXT;
+
