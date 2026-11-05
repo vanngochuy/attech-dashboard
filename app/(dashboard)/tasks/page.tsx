@@ -94,6 +94,12 @@ export default function EmailDocumentTasksPage() {
   const [queueProgress, setQueueProgress] = useState<{ current: number; total: number } | null>(null);
   const queueStopRef = useRef(false);
 
+  // Danh sách ID các văn bản được tick chọn để thao tác hàng loạt (Đọc AI 2 trang / Xóa nhiều)
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBatchAiRunning, setIsBatchAiRunning] = useState(false);
+  const [batchAiProgress, setBatchAiProgress] = useState<{ current: number; total: number } | null>(null);
+  const batchAiStopRef = useRef(false);
+
   // Modal So sánh chi tiết Văn bản Email (Chưa chính thức) vs Văn bản chính thức ở tab Tài liệu
   const [compareItem, setCompareItem] = useState<EmailDraftItem | null>(null);
 
@@ -461,12 +467,82 @@ export default function EmailDocumentTasksPage() {
     if (!confirm(`Xóa văn bản dự thảo "${item.extractedTitle}" khỏi danh sách?`)) return;
     const updated = drafts.filter((d) => d.id !== item.id);
     setDrafts(updated);
+    setSelectedIds((prev) => prev.filter((id) => id !== item.id));
     await fetch('/api/compliance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'email_drafts', records: updated }),
     });
     showToast('success', 'Đã xóa văn bản dự thảo khỏi danh sách.');
+  };
+
+  // Xóa hàng loạt văn bản đã được tick chọn
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} văn bản đã chọn khỏi danh sách không?`)) return;
+
+    setIsSaving(true);
+    const toDeleteSet = new Set(selectedIds);
+    const updated = drafts.filter((d) => !toDeleteSet.has(d.id));
+    setDrafts(updated);
+    const deletedCount = selectedIds.length;
+    setSelectedIds([]);
+
+    try {
+      const res = await fetch('/api/compliance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'email_drafts', records: updated }),
+      });
+      if (!res.ok) throw new Error('Không thể lưu dữ liệu sau khi xóa');
+      showToast('success', `Đã xóa thành công ${deletedCount} văn bản.`);
+    } catch (err: any) {
+      showToast('error', 'Lỗi khi xóa nhiều văn bản: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Đọc AI 2 trang hàng loạt cho các văn bản đã tick chọn
+  const handleBatchAiScan = async () => {
+    if (selectedIds.length === 0) return;
+
+    if (isBatchAiRunning) {
+      batchAiStopRef.current = true;
+      setIsBatchAiRunning(false);
+      showToast('success', 'Đã tạm dừng đọc AI cho các văn bản đã chọn.');
+      return;
+    }
+
+    const targetItems = drafts.filter((d) => selectedIds.includes(d.id));
+    setIsBatchAiRunning(true);
+    batchAiStopRef.current = false;
+    setBatchAiProgress({ current: 0, total: targetItems.length });
+
+    showToast(
+      'success',
+      `Bắt đầu đọc AI 2 trang cho ${targetItems.length} văn bản đã chọn (tốc độ an toàn để không vượt quota)...`
+    );
+
+    let count = 0;
+    for (const item of targetItems) {
+      if (batchAiStopRef.current) break;
+      count++;
+      setBatchAiProgress({ current: count, total: targetItems.length });
+      try {
+        await handleScanSingleAi(item);
+      } catch (err) {
+        console.error('Lỗi khi AI đọc file:', item.id, err);
+      }
+      // Nghỉ 4.5s để đảm bảo không vượt 15 RPM của Gemini Free
+      if (count < targetItems.length && !batchAiStopRef.current) {
+        await new Promise((resolve) => setTimeout(resolve, 4500));
+      }
+    }
+
+    setIsBatchAiRunning(false);
+    setBatchAiProgress(null);
+    showToast('success', `Đã hoàn tất đọc AI cho ${count} văn bản được chọn!`);
   };
 
   const filteredDrafts = useMemo(() => {
@@ -874,68 +950,180 @@ export default function EmailDocumentTasksPage() {
             </p>
           </div>
         ) : (
-          <div className="border border-slate-200 rounded-xl bg-white shadow-xs">
-            {/* Table Header - FREEZE (Sticky top-0 z-20) */}
-            <div className="sticky top-0 z-20 h-11 px-4 flex items-center justify-between bg-slate-100/95 backdrop-blur-md text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 rounded-t-xl shadow-2xs">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <span className="w-8 text-center">STT</span>
-                <span className="flex-1">VĂN BẢN (TRÍCH YẾU)</span>
-              </div>
-              <div className="flex items-center gap-3 shrink-0 text-right">
-                <span className="w-32 text-left hidden sm:inline">SỐ KÝ HIỆU</span>
-                <span className="w-40 text-left hidden md:inline">CƠ QUAN BAN HÀNH</span>
-                <span className="w-24 text-center hidden lg:inline">BAN HÀNH</span>
-                <span className="w-28 text-center hidden xl:inline">NGÀY EMAIL</span>
-                <span className="w-36 text-center">ĐỐI CHIẾU</span>
-                <span className="w-32 text-right">THAO TÁC</span>
-              </div>
-            </div>
-
-            {/* Table Rows (Duyệt qua paginatedDrafts theo trang) */}
-            <div className="divide-y divide-slate-100">
-              {paginatedDrafts.map((item, idx) => (
-                <div
-                  key={item.id}
-                  onClick={() => setCompareItem(item)}
-                  className="py-2.5 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group cursor-pointer bg-white"
-                >
-                  {/* Trái: STT + Tên văn bản PDF trong Email + Thông tin người gửi */}
-                  <div className="flex items-start gap-2.5 min-w-0 pr-3 flex-1">
-                    <span className="w-8 text-center text-xs text-slate-400 font-mono mt-0.5">
-                      {(currentPage - 1) * pageSize + idx + 1}
+          <>
+            {/* Thanh Thao Tác Hàng Loạt (Hiện khi có văn bản được tick chọn) */}
+            {selectedIds.length > 0 && (
+              <div className="mb-3 px-4 py-2.5 bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-200 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-sky-600 text-white font-bold text-xs shadow-2xs">
+                      {selectedIds.length}
                     </span>
-                    <FileText
-                      className={`w-4 h-4 shrink-0 mt-0.5 ${
-                        item.matchType === 'UPDATE_CANDIDATE'
-                          ? 'text-amber-600'
-                          : 'text-sky-600'
-                      }`}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p
-                          className="text-xs font-semibold text-slate-900 group-hover:text-sky-700 truncate"
-                          title={item.extractedTitle}
-                        >
-                          {item.extractedTitle}
-                        </p>
-                        {item.aiExtracted && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                            <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> AI Đã đọc
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                        <span className="font-mono text-slate-600 truncate max-w-[200px]" title={item.pdfFileName}>
-                          📄 {item.pdfFileName}
-                        </span>
-                        <span>•</span>
-                        <span className="truncate max-w-[220px]" title={item.emailSubject}>
-                          📧 {item.senderEmail}
-                        </span>
-                      </div>
-                    </div>
+                    <span className="text-xs font-bold text-slate-800">
+                      văn bản đã chọn
+                    </span>
                   </div>
+                  <div className="h-4 w-px bg-slate-300" />
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(filteredDrafts.map((d) => d.id))}
+                    className="text-xs font-semibold text-sky-700 hover:text-sky-900 hover:underline cursor-pointer"
+                  >
+                    Chọn tất cả {filteredDrafts.length} văn bản
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds([])}
+                    className="text-xs font-medium text-slate-500 hover:text-slate-800 hover:underline cursor-pointer"
+                  >
+                    Bỏ chọn
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Nút Đọc AI 2 trang cho các file đã tick */}
+                  <button
+                    type="button"
+                    onClick={handleBatchAiScan}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs cursor-pointer transition-all border ${
+                      isBatchAiRunning
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-500 animate-pulse'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500'
+                    }`}
+                    title="Đọc 2 trang đầu bằng AI cho các văn bản đã tick chọn"
+                  >
+                    {isBatchAiRunning ? (
+                      <>
+                        <Pause className="w-3.5 h-3.5" />
+                        <span>Dừng đọc AI ({batchAiProgress?.current}/{batchAiProgress?.total})</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Đọc AI 2 trang ({selectedIds.length} file)</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Nút Xóa nhiều file cùng lúc */}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={handleBatchDelete}
+                      disabled={isSaving || isBatchAiRunning}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer transition-all disabled:opacity-50 border border-rose-500"
+                      title="Xóa vĩnh viễn các văn bản đã chọn khỏi danh sách"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Xóa đã chọn ({selectedIds.length} file)</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="border border-slate-200 rounded-xl bg-white shadow-xs">
+              {/* Table Header - FREEZE (Sticky top-0 z-20) */}
+              <div className="sticky top-0 z-20 h-11 px-4 flex items-center justify-between bg-slate-100/95 backdrop-blur-md text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 rounded-t-xl shadow-2xs">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  {/* Ô Checkbox Chọn tất cả trên trang hiện tại */}
+                  <div className="w-6 flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={paginatedDrafts.length > 0 && paginatedDrafts.every((d) => selectedIds.includes(d.id))}
+                      onChange={() => {
+                        const pageIds = paginatedDrafts.map((d) => d.id);
+                        const isAllPageSelected = pageIds.length > 0 && pageIds.every((d) => selectedIds.includes(d));
+                        if (isAllPageSelected) {
+                          setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+                        } else {
+                          setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer accent-sky-600"
+                      title="Chọn / Bỏ chọn tất cả văn bản trên trang này"
+                    />
+                  </div>
+                  <span className="w-8 text-center">STT</span>
+                  <span className="flex-1">VĂN BẢN (TRÍCH YẾU)</span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0 text-right">
+                  <span className="w-32 text-left hidden sm:inline">SỐ KÝ HIỆU</span>
+                  <span className="w-40 text-left hidden md:inline">CƠ QUAN BAN HÀNH</span>
+                  <span className="w-24 text-center hidden lg:inline">BAN HÀNH</span>
+                  <span className="w-28 text-center hidden xl:inline">NGÀY EMAIL</span>
+                  <span className="w-36 text-center">ĐỐI CHIẾU</span>
+                  <span className="w-32 text-right">THAO TÁC</span>
+                </div>
+              </div>
+
+              {/* Table Rows (Duyệt qua paginatedDrafts theo trang) */}
+              <div className="divide-y divide-slate-100">
+                {paginatedDrafts.map((item, idx) => {
+                  const isSelected = selectedIds.includes(item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => setCompareItem(item)}
+                      className={`py-2.5 px-4 flex items-center justify-between hover:bg-sky-50/50 transition-colors group cursor-pointer ${
+                        isSelected ? 'bg-sky-50/70 border-l-4 border-l-sky-500' : 'bg-white'
+                      }`}
+                    >
+                      {/* Trái: Checkbox + STT + Tên văn bản PDF trong Email + Thông tin người gửi */}
+                      <div className="flex items-start gap-2.5 min-w-0 pr-3 flex-1">
+                        <div
+                          className="w-6 flex items-center justify-center pt-0.5 shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setSelectedIds((prev) =>
+                                prev.includes(item.id)
+                                ? prev.filter((id) => id !== item.id)
+                                : [...prev, item.id]
+                              );
+                            }}
+                            className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer accent-sky-600"
+                          />
+                        </div>
+                        <span className="w-8 text-center text-xs text-slate-400 font-mono mt-0.5">
+                          {(currentPage - 1) * pageSize + idx + 1}
+                        </span>
+                        <FileText
+                          className={`w-4 h-4 shrink-0 mt-0.5 ${
+                            item.matchType === 'UPDATE_CANDIDATE'
+                              ? 'text-amber-600'
+                              : 'text-sky-600'
+                          }`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p
+                              className="text-xs font-semibold text-slate-900 group-hover:text-sky-700 truncate"
+                              title={item.extractedTitle}
+                            >
+                              {item.extractedTitle}
+                            </p>
+                            {item.aiExtracted && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                                <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> AI Đã đọc
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                            <span className="font-mono text-slate-600 truncate max-w-[200px]" title={item.pdfFileName}>
+                              📄 {item.pdfFileName}
+                            </span>
+                            <span>•</span>
+                            <span className="truncate max-w-[220px]" title={item.emailSubject}>
+                              📧 {item.senderEmail}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
 
                   {/* Phải: Số hiệu, Cơ quan, Ngày ban hành, Ngày email, Nhãn đối chiếu, Thao tác */}
                   <div className="flex items-center gap-3 shrink-0">
@@ -1024,7 +1212,8 @@ export default function EmailDocumentTasksPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
 
             {/* Thanh Phân Trang (Pagination Footer) */}
@@ -1107,6 +1296,7 @@ export default function EmailDocumentTasksPage() {
               </div>
             </div>
           </div>
+        </>
         )}
       </div>
 

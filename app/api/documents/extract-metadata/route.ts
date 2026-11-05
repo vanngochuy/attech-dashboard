@@ -9,8 +9,8 @@ export async function POST(request: Request) {
     const apiKey = cleanEnv(process.env.GEMINI_API_KEY);
     if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY') {
       return NextResponse.json(
-        { 
-          error: 'Chưa cấu hình GEMINI_API_KEY hợp lệ trong file .env.local. Hãy bổ sung API key của bạn để sử dụng tính năng AI trích xuất thông tin tự động.' 
+        {
+          error: 'Chưa cấu hình GEMINI_API_KEY hợp lệ trong file .env.local. Hãy bổ sung API key của bạn để sử dụng tính năng AI trích xuất thông tin tự động.'
         },
         { status: 400 }
       );
