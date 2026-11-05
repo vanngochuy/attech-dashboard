@@ -681,37 +681,6 @@ export default function EmailDocumentTasksPage() {
           </div>
 
           <div className="flex items-center gap-2.5 ml-auto">
-            {/* Cụm Thao tác Xóa hàng loạt khi tick chọn văn bản (đặt cố định trên Header, không làm nhảy layout bảng) */}
-            {selectedIds.length > 0 && isAdmin && (
-              <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs shadow-sm animate-in fade-in duration-150 border ${
-                isDeepAero
-                  ? 'bg-rose-950/60 border-rose-500/40 text-rose-200'
-                  : 'bg-white/95 border-rose-300 text-slate-700'
-              }`}>
-                <span className="font-medium">
-                  Đã chọn: <strong className="text-rose-500 font-mono font-bold">{selectedIds.length}</strong>
-                </span>
-                <button
-                  type="button"
-                  onClick={handleBatchDelete}
-                  disabled={isSaving}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded text-xs font-bold transition-all shadow-xs cursor-pointer border border-rose-500"
-                  title="Xóa các văn bản đã tick chọn"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>Xóa</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedIds([])}
-                  className="text-slate-400 hover:text-slate-200 p-0.5 cursor-pointer ml-0.5"
-                  title="Bỏ chọn tất cả"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
             <div className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs shadow-xs border ${
               isDeepAero
                 ? 'glass-pill-deep-aero'
@@ -976,15 +945,15 @@ export default function EmailDocumentTasksPage() {
         </div>
       </div>
 
-      {/* Vùng cuộn Bảng dữ liệu (Tiêu đề Freeze sticky top-0 giống tab Tài liệu) */}
-      <div className="flex-1 overflow-y-auto px-6 pt-3 pb-12">
+      {/* Vùng Bảng dữ liệu - Cố định Khung Tiêu đề làm giới hạn trên tuyệt đối, chỉ cuộn danh sách văn bản */}
+      <div className="flex-1 flex flex-col min-h-0 px-6 py-3">
         {isLoading ? (
-          <div className="p-16 flex flex-col items-center justify-center text-slate-500 text-xs gap-3">
+          <div className="flex-1 border border-slate-200 rounded-xl bg-white p-16 flex flex-col items-center justify-center text-slate-500 text-xs gap-3 shadow-xs">
             <Loader2 className="w-6 h-6 animate-spin text-sky-600" />
             <span>Đang tải danh sách văn bản PDF lọc từ Email...</span>
           </div>
         ) : filteredDrafts.length === 0 ? (
-          <div className="p-16 flex flex-col items-center justify-center text-center">
+          <div className="flex-1 border border-slate-200 rounded-xl bg-white p-16 flex flex-col items-center justify-center text-center shadow-xs">
             <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 mb-3 shadow-xs">
               <MailSearch className="w-6 h-6 text-sky-600" />
             </div>
@@ -996,9 +965,9 @@ export default function EmailDocumentTasksPage() {
             </p>
           </div>
         ) : (
-          <div className="border border-slate-200 rounded-xl bg-white shadow-xs">
-            {/* Table Header - FREEZE (Sticky top-0 z-20) */}
-            <div className="sticky top-0 z-20 h-11 px-4 flex items-center justify-between bg-slate-100/95 backdrop-blur-md text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 rounded-t-xl shadow-2xs">
+          <div className="flex-1 flex flex-col min-h-0 border border-slate-200 rounded-xl bg-white shadow-xs overflow-hidden">
+            {/* Table Header - CỐ ĐỊNH LÀM GIỚI HẠN CHẶN TRÊN (Không cuộn, chặn đứng tài liệu không vượt lên trên) */}
+            <div className="shrink-0 h-11 px-4 flex items-center justify-between bg-slate-100 text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 z-10 shadow-2xs">
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 {/* Ô Checkbox Chọn tất cả trên trang hiện tại */}
                 <div className="w-6 flex items-center justify-center">
@@ -1064,8 +1033,8 @@ export default function EmailDocumentTasksPage() {
               </div>
             </div>
 
-              {/* Table Rows (Duyệt qua paginatedDrafts theo trang) */}
-              <div className="divide-y divide-slate-100">
+            {/* Table Rows - VÙNG CUỘN DUY NHẤT (Khi cuộn chỉ di chuyển bên dưới Table Header) */}
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 min-h-0">
                 {paginatedDrafts.map((item, idx) => {
                   const isSelected = selectedIds.includes(item.id);
                   return (
@@ -1223,8 +1192,8 @@ export default function EmailDocumentTasksPage() {
             })}
             </div>
 
-            {/* Thanh Phân Trang (Pagination Footer) */}
-            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 rounded-b-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+            {/* Thanh Phân Trang (Pagination Footer) - Cố định đáy bảng */}
+            <div className="shrink-0 px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2 text-slate-600">
                 <span>
                   Hiển thị <span className="font-semibold text-slate-900 font-mono">{(currentPage - 1) * pageSize + 1}</span> - <span className="font-semibold text-slate-900 font-mono">{Math.min(currentPage * pageSize, filteredDrafts.length)}</span> trên tổng số <span className="font-semibold text-slate-900 font-mono">{filteredDrafts.length}</span> văn bản
