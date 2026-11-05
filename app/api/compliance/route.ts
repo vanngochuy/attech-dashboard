@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdminClient, getSupabaseClient } from '@/lib/supabase';
+import { getSupabaseAdminClient, getSupabaseClient, cleanEnv } from '@/lib/supabase';
 import {
   DEFAULT_LICENSES,
   DEFAULT_TRAINING_RECORDS,
@@ -8,6 +8,7 @@ import {
   StaffTrainingRecord,
   EmailDraftItem,
 } from '@/lib/compliance';
+import { resolveDriveFolderId, DRIVE_FOLDER_MAP } from '@/lib/drive-folders';
 
 export const dynamic = 'force-dynamic';
 
@@ -158,15 +159,34 @@ export async function POST(req: Request) {
 
     const contentType = req.headers.get('content-type') || '';
 
-    // 1. Upload file PDF / Ảnh đính kèm cho Giấy phép hoặc Hồ sơ huấn luyện
+    // 1. Upload file PDF / Ảnh đính kèm cho Giấy phép, Hồ sơ huấn luyện hoặc Tài liệu chưa xác thực
+    //    -> Lưu đồng thời lên Google Drive (qua n8n giống tab Tài liệu) + Supabase Storage dự phòng 24/7
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
       const folder = (formData.get('folder') as string) || 'attachments';
+      const customTitle = (formData.get('title') as string | null)?.trim() || '';
 
       if (!file) {
         return NextResponse.json({ error: 'Không tìm thấy file tải lên.' }, { status: 400 });
       }
+
+      // Ánh xạ sang đúng nhánh thư mục trên Google Drive theo cây ATTECH_DOCUMENTS:
+      // - licenses     -> ATTECH_DOCUMENTS/GIẤY PHÉP-CHỨNG CHỈ/GIẤY PHÉP-CC
+      // - training     -> ATTECH_DOCUMENTS/GIẤY PHÉP-CHỨNG CHỈ/CHỨNG CHỈ
+      // - email-drafts -> ATTECH_DOCUMENTS/TÀI LIỆU CHƯA XÁC THỰC
+      const driveCodeKey =
+        folder === 'licenses'
+          ? 'GIAY_PHEP_CC'
+          : folder === 'training'
+            ? 'CHUNG_CHI_HL'
+            : folder === 'email-drafts'
+              ? 'TAI_LIEU_CHUA_XAC_THUC'
+              : 'GIAY_PHEP_CC';
+
+      const targetDriveFolderId = await resolveDriveFolderId(driveCodeKey);
+      const driveRelativePath =
+        DRIVE_FOLDER_MAP[driveCodeKey]?.relativePath || 'ATTECH_DOCUMENTS';
 
       const safeName = file.name
         .normalize('NFD')
@@ -178,25 +198,78 @@ export async function POST(req: Request) {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      const { error: uploadError } = await supabase.storage
+      // Chạy song song: (A) Tải lên Google Drive qua luồng n8n (giống tab Tài liệu) & (B) Lưu bản sao trên Supabase Storage
+      const n8nWebhookUrl = cleanEnv(process.env.N8N_WEBHOOK_URL);
+
+      const driveUploadPromise = (async () => {
+        if (!n8nWebhookUrl) return null;
+        try {
+          const n8nFd = new FormData();
+          const blobFile = new File([buffer], file.name, {
+            type: file.type || 'application/pdf',
+          });
+          n8nFd.append('file', blobFile);
+          n8nFd.append('title', customTitle || file.name.replace(/\.[^/.]+$/, ''));
+          n8nFd.append('scope_domain', driveCodeKey);
+          n8nFd.append('target_folder_id', targetDriveFolderId);
+          n8nFd.append('skip_db_insert', 'true');
+
+          const n8nRes = await fetch(n8nWebhookUrl, {
+            method: 'POST',
+            body: n8nFd,
+          });
+          if (!n8nRes.ok) return null;
+          const n8nData = await n8nRes.json();
+          const driveFileId =
+            n8nData?.drive_file_id ||
+            n8nData?.file?.drive_file_id ||
+            n8nData?.file?.id ||
+            null;
+          const driveViewUrl =
+            n8nData?.drive_view_url ||
+            n8nData?.file?.drive_view_url ||
+            n8nData?.file?.webViewLink ||
+            (driveFileId ? `https://drive.google.com/file/d/${driveFileId}/view` : null);
+
+          return driveFileId ? { driveFileId, driveViewUrl } : null;
+        } catch (err) {
+          console.warn('[Compliance Upload] Không kết nối được n8n local, dùng bản lưu Supabase:', err);
+          return null;
+        }
+      })();
+
+      const supabaseUploadPromise = supabase.storage
         .from(BUCKET_NAME)
         .upload(storagePath, buffer, {
           contentType: file.type || 'application/pdf',
           upsert: true,
         });
 
-      if (uploadError) {
+      const [driveResult, { error: uploadError }] = await Promise.all([
+        driveUploadPromise,
+        supabaseUploadPromise,
+      ]);
+
+      const { data: pubData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(storagePath);
+      const supabaseUrl = !uploadError ? pubData.publicUrl : '';
+
+      // Ưu tiên trả về link Google Drive (nếu đã đẩy lên Google Drive thành công giống tab Tài liệu)
+      const finalFileUrl = driveResult?.driveViewUrl || supabaseUrl;
+
+      if (!finalFileUrl) {
         return NextResponse.json(
-          { error: 'Không thể tải file lên Supabase Storage: ' + uploadError.message },
+          { error: 'Không thể tải file lên Google Drive hoặc Supabase Storage.' },
           { status: 500 }
         );
       }
 
-      const { data: pubData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(storagePath);
-
       return NextResponse.json({
         success: true,
-        fileUrl: pubData.publicUrl,
+        fileUrl: finalFileUrl,
+        supabaseBackupUrl: supabaseUrl,
+        driveFileId: driveResult?.driveFileId || null,
+        driveFolderId: targetDriveFolderId,
+        driveRelativePath,
         fileName: file.name,
       });
     }

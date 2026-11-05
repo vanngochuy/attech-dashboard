@@ -312,7 +312,7 @@ export const DEFAULT_EMAIL_DRAFTS: EmailDraftItem[] = [
     extractedIssuer: 'ATTECH',
     extractedIssueDate: '2026-11-04',
     scopeDomain: 'SMS',
-    driveFolderName: '00_VAN_BAN_CHUA_CHINH_THUC (Email PDF)',
+    driveFolderName: 'ATTECH_DOCUMENTS/TÀI LIỆU CHƯA XÁC THỰC',
     matchType: 'UPDATE_CANDIDATE',
     similarityScore: 95,
     matchedOfficialDoc: {
@@ -335,7 +335,7 @@ export const DEFAULT_EMAIL_DRAFTS: EmailDraftItem[] = [
     extractedIssuer: 'ATTECH',
     extractedIssueDate: '2026-11-03',
     scopeDomain: 'SMS',
-    driveFolderName: '00_VAN_BAN_CHUA_CHINH_THUC (Email PDF)',
+    driveFolderName: 'ATTECH_DOCUMENTS/TÀI LIỆU CHƯA XÁC THỰC',
     matchType: 'UPDATE_CANDIDATE',
     similarityScore: 100,
     matchedOfficialDoc: {
@@ -358,7 +358,7 @@ export const DEFAULT_EMAIL_DRAFTS: EmailDraftItem[] = [
     extractedIssuer: 'VATM',
     extractedIssueDate: '2026-11-01',
     scopeDomain: 'QL_KY_THUAT',
-    driveFolderName: '00_VAN_BAN_CHUA_CHINH_THUC (Email PDF)',
+    driveFolderName: 'ATTECH_DOCUMENTS/TÀI LIỆU CHƯA XÁC THỰC',
     matchType: 'NEW_DRAFT',
     similarityScore: 18,
     comparisonSummary: 'Chưa có văn bản tương ứng trong kho Tài liệu chính thức. Đang lưu tại thư mục Drive Văn bản chưa chính thức để chờ thẩm định.',

@@ -198,7 +198,7 @@ export async function POST(req: Request) {
         extractedIssueDate: draftItem.extractedIssueDate || new Date().toISOString().slice(0, 10),
         scopeDomain: draftItem.scopeDomain || 'QL_KY_THUAT',
         fileUrl: draftItem.fileUrl || '',
-        driveFolderName: '00_VAN_BAN_CHUA_CHINH_THUC (Email PDF)',
+        driveFolderName: 'ATTECH_DOCUMENTS/TÀI LIỆU CHƯA XÁC THỰC',
         matchType: comparison.matchType,
         similarityScore: comparison.similarityScore,
         matchedOfficialDoc: comparison.matchedOfficialDoc,
@@ -253,7 +253,7 @@ export async function POST(req: Request) {
                     extractedIssueDate: item.extractedIssueDate || '',
                     scopeDomain: item.scopeDomain || 'QL_KY_THUAT',
                     fileUrl: item.fileUrl || '',
-                    driveFolderName: '00_VAN_BAN_CHUA_CHINH_THUC (Email PDF)',
+                    driveFolderName: 'ATTECH_DOCUMENTS/TÀI LIỆU CHƯA XÁC THỰC',
                     driveFileId: item.driveFileId,
                     matchType: 'NEW_DRAFT',
                   });

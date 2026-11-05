@@ -380,6 +380,11 @@ export default function TrainingRecordsPage() {
           </div>
 
           <div className="flex items-center gap-2.5 ml-auto">
+            <div className="hidden md:flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
+              <Upload className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+              <span className="text-slate-600 font-medium">Drive:</span>
+              <span className="text-sky-700 font-bold font-mono">GIẤY PHÉP-CHỨNG CHỈ/CHỨNG CHỈ</span>
+            </div>
             <div className="hidden sm:flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
               <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span className="text-slate-600 font-medium">Supabase:</span>

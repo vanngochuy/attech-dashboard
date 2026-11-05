@@ -435,8 +435,8 @@ export default function EmailDocumentTasksPage() {
           <div className="flex items-center gap-2.5 ml-auto">
             <div className="hidden lg:flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
               <FolderGit2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span className="text-slate-600 font-medium">Folder Drive riêng:</span>
-              <span className="text-amber-700 font-bold font-mono">00_VAN_BAN_CHUA_CHINH_THUC</span>
+              <span className="text-slate-600 font-medium">Google Drive:</span>
+              <span className="text-amber-700 font-bold font-mono">ATTECH_DOCUMENTS/TÀI LIỆU CHƯA XÁC THỰC</span>
             </div>
 
             <button
@@ -473,10 +473,11 @@ export default function EmailDocumentTasksPage() {
       {/* Toast thông báo */}
       {toast && (
         <div
-          className={`mx-6 mt-3 p-2.5 rounded-lg border text-xs flex items-center justify-between shadow-xs ${toast.type === 'success'
+          className={`mx-6 mt-3 p-2.5 rounded-lg border text-xs flex items-center justify-between shadow-xs ${
+            toast.type === 'success'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
               : 'bg-rose-50 border-rose-200 text-rose-800'
-            }`}
+          }`}
         >
           <div className="flex items-center gap-2">
             {toast.type === 'success' ? (
@@ -573,40 +574,44 @@ export default function EmailDocumentTasksPage() {
               <button
                 type="button"
                 onClick={() => setMatchFilter('ALL')}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${matchFilter === 'ALL'
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                  matchFilter === 'ALL'
                     ? 'bg-white text-slate-900 shadow-2xs font-semibold'
                     : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                }`}
               >
                 Tất cả ({filteredDrafts.length})
               </button>
               <button
                 type="button"
                 onClick={() => setMatchFilter('UPDATE_CANDIDATE')}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${matchFilter === 'UPDATE_CANDIDATE'
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${
+                  matchFilter === 'UPDATE_CANDIDATE'
                     ? 'bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs font-semibold'
                     : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                }`}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Bản cập nhật văn bản
               </button>
               <button
                 type="button"
                 onClick={() => setMatchFilter('NEW_DRAFT')}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${matchFilter === 'NEW_DRAFT'
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${
+                  matchFilter === 'NEW_DRAFT'
                     ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs font-semibold'
                     : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                }`}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-sky-500" /> Dự thảo mới
               </button>
               <button
                 type="button"
                 onClick={() => setMatchFilter('PROMOTED')}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${matchFilter === 'PROMOTED'
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${
+                  matchFilter === 'PROMOTED'
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs font-semibold'
                     : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                }`}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Đã ban hành
               </button>
@@ -665,10 +670,11 @@ export default function EmailDocumentTasksPage() {
                       {idx + 1}
                     </span>
                     <FileText
-                      className={`w-4 h-4 shrink-0 mt-0.5 ${item.matchType === 'UPDATE_CANDIDATE'
+                      className={`w-4 h-4 shrink-0 mt-0.5 ${
+                        item.matchType === 'UPDATE_CANDIDATE'
                           ? 'text-amber-600'
                           : 'text-sky-600'
-                        }`}
+                      }`}
                     />
                     <div className="min-w-0 flex-1">
                       <p

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdminClient, isSupabaseAdminConfigured, cleanEnv } from '@/lib/supabase';
 import { extractDocumentOcr } from '@/lib/ocr';
+import { resolveDriveFolderId } from '@/lib/drive-folders';
 
 export const maxDuration = 60;
 
@@ -12,6 +13,11 @@ export async function POST(request: Request) {
     const skipOcr = formData.get('skip_ocr') === 'true';
     const file = formData.get('file') as File | null;
     const title = (formData.get('title') as string | null)?.trim() || '';
+    const scopeDomain = (formData.get('scope_domain') as string | null) || 'QL_KY_THUAT';
+
+    // Tự động lấy Google Drive Folder ID từ cấu hình trung tâm `lib/drive-folders.ts`
+    const targetFolderId = await resolveDriveFolderId(scopeDomain);
+    formData.set('target_folder_id', targetFolderId);
 
     const n8nWebhookUrl = cleanEnv(process.env.N8N_WEBHOOK_URL);
     if (!n8nWebhookUrl) {
