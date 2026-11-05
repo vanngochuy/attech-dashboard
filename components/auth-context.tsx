@@ -792,15 +792,15 @@ export function SidebarUserStatus() {
 
   if (isAdmin) {
     return (
-      <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-200 space-y-2.5">
+      <div className="p-3 rounded-xl bg-white/90 backdrop-blur-md border border-white shadow-sm space-y-2.5">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-xs">
+          <div className="w-8 h-8 rounded-full bg-[#0284c7] text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-xs">
             <ShieldCheck className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <p className="text-xs font-bold text-slate-900 truncate">{username || 'huyvn'}</p>
-              <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-indigo-600 text-white">
+              <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-[#0284c7] text-white">
                 Admin
               </span>
             </div>
@@ -820,7 +820,7 @@ export function SidebarUserStatus() {
   }
 
   return (
-    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+    <div className="p-3 rounded-xl bg-white/90 backdrop-blur-md border border-white shadow-sm space-y-2.5">
       <div className="flex items-center gap-2.5">
         <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-semibold shrink-0 border border-sky-200">
           <User className="w-4 h-4" />

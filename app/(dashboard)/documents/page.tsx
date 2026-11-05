@@ -244,136 +244,180 @@ function DocumentsContent() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 text-slate-800 font-sans selection:bg-indigo-500/20">
-      {/* Top Bar Header */}
-      <header className="h-14 border-b border-slate-200 bg-white flex items-center justify-end px-6 z-20 shrink-0 shadow-xs">
-        {/* Right Action Tools */}
-        <div className="flex items-center gap-2.5">
-          {/* Trạng thái Google Drive & Supabase (Bên trái khu vực tìm kiếm) */}
-          <div className="hidden lg:flex items-center gap-2 mr-1">
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-xs">
-              <Cloud className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-              <span className="text-slate-500">Drive:</span>
-              <span className="text-emerald-600 font-bold font-mono">Synced</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-xs">
-              <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span className="text-slate-500">Supabase:</span>
-              <span className="text-emerald-600 font-bold font-mono">Ready</span>
-            </div>
-          </div>
+    <div className="flex flex-col h-full bg-slate-50 text-slate-800 font-sans selection:bg-sky-500/20">
+      <style>{`
+        @keyframes driftCloudHeader1 {
+          0%, 100% { transform: translateX(0px); }
+          50% { transform: translateX(35px); }
+        }
+        @keyframes driftCloudHeader2 {
+          0%, 100% { transform: translateX(0px); }
+          50% { transform: translateX(-30px); }
+        }
+      `}</style>
 
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm theo tên, số hiệu (123/QĐ...), đơn vị..."
-              className="bg-slate-100 hover:bg-slate-150 focus:bg-white border border-slate-200 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 rounded-lg pl-8 pr-8 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all w-56 focus:w-72 shadow-xs"
-            />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
-              ⌘K
-            </span>
-          </div>
-
-          {/* Admin Quét Drive Nhanh (Chỉ hiển thị cho Admin) */}
-          {isAdmin && (
-            <button
-              onClick={handleScanDrive}
-              disabled={isScanningDrive}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-medium transition-all shadow-xs disabled:opacity-50"
-              title="Admin: Kích hoạt n8n quét và kiểm tra sự tồn tại của toàn bộ file trên Google Drive"
-            >
-              {isScanningDrive ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
-              ) : (
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-              )}
-              <span className="hidden sm:inline">{isScanningDrive ? 'Đang quét...' : 'Quét Drive'}</span>
-            </button>
-          )}
-
-          {/* Refresh button */}
-          <button
-            onClick={fetchDocuments}
-            disabled={isLoading}
-            className="p-2 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 rounded-lg transition-colors shadow-xs disabled:opacity-50"
-            title="Làm mới danh sách"
+      {/* Khối Tiêu đề & Thanh Chuyên môn: Nền Xanh Bầu Trời & Mây Trắng */}
+      <div className="relative bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8] border-b border-sky-300 shadow-sm shrink-0 overflow-hidden z-20">
+        {/* Các đám mây trắng bồng bềnh trang trí trên nền bầu trời */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
+          <svg
+            viewBox="0 0 220 80"
+            className="absolute -top-3 left-16 w-48 text-white/25 fill-current"
+            style={{ animation: 'driftCloudHeader1 14s ease-in-out infinite' }}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-
-          {/* View toggle */}
-          <div className="flex items-center p-0.5 bg-slate-100 border border-slate-200 rounded-lg">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-xs font-semibold' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              title="Chế độ Danh sách (List)"
-            >
-              <List className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-xs font-semibold' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              title="Chế độ Thẻ (Grid)"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* New Document Button (Chỉ hiển thị cho Admin) */}
-          {isAdmin && (
-            <button
-              onClick={() => setIsUploadModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-xs font-semibold transition-all shadow-sm shadow-indigo-600/30"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Thêm tài liệu</span>
-              <span className="text-[10px] text-indigo-200 font-mono ml-0.5">C</span>
-            </button>
-          )}
+            <path d="M40 65 H180 A18 18 0 0 0 180 30 A24 24 0 0 0 135 14 A30 30 0 0 0 75 20 A22 22 0 0 0 40 65 Z" />
+          </svg>
+          <svg
+            viewBox="0 0 240 80"
+            className="absolute top-2 left-[38%] w-56 text-white/30 fill-current"
+            style={{ animation: 'driftCloudHeader2 18s ease-in-out infinite' }}
+          >
+            <path d="M35 65 H195 A20 20 0 0 0 195 28 A26 26 0 0 0 148 12 A32 32 0 0 0 82 18 A24 24 0 0 0 35 65 Z" />
+          </svg>
+          <svg
+            viewBox="0 0 200 80"
+            className="absolute -bottom-4 right-24 w-52 text-white/25 fill-current"
+            style={{ animation: 'driftCloudHeader1 16s ease-in-out infinite' }}
+          >
+            <path d="M45 65 H165 A20 20 0 0 0 165 25 A22 22 0 0 0 125 12 A30 30 0 0 0 68 20 A24 24 0 0 0 45 65 Z" />
+          </svg>
         </div>
-      </header>
 
-      {/* Sub-header / Filter Pills Bar (Khung Chuyên môn Sáng & Rõ nét) */}
-      <div className="border-b border-slate-200 bg-white px-6 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar shrink-0 shadow-xs">
-        {/* Department Pills */}
-        <div className="flex items-center gap-2">
-          <div className="text-slate-500 text-xs uppercase tracking-wider font-semibold mr-1 flex items-center gap-1.5 shrink-0">
-            <Filter className="w-3.5 h-3.5 text-indigo-600" /> Chuyên môn:
+        {/* Top Bar Header */}
+        <header className="h-14 border-b border-white/20 flex items-center justify-between px-6 relative z-10">
+          <div className="hidden sm:flex items-center gap-2 text-white font-bold text-sm drop-shadow-2xs">
+            <Cloud className="w-4 h-4 text-white fill-white/80" />
+            <span>Kho Văn bản &amp; Tài liệu Nghiệp vụ</span>
           </div>
-          {DEPARTMENTS.map((dept) => {
-            const isActive = activeFilter === dept.id;
-            const count = departmentCounts[dept.id] || 0;
-            return (
+
+          {/* Right Action Tools */}
+          <div className="flex items-center gap-2.5 ml-auto">
+            {/* Trạng thái Google Drive & Supabase */}
+            <div className="hidden lg:flex items-center gap-2 mr-1">
+              <div className="flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
+                <Cloud className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                <span className="text-slate-600 font-medium">Drive:</span>
+                <span className="text-emerald-600 font-bold font-mono">Synced</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
+                <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="text-slate-600 font-medium">Supabase:</span>
+                <span className="text-emerald-600 font-bold font-mono">Ready</span>
+              </div>
+            </div>
+
+            {/* Search bar */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sky-600 w-3.5 h-3.5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm theo tên, số hiệu (123/QĐ...), đơn vị..."
+                className="bg-white/95 focus:bg-white border border-white focus:border-sky-200 focus:ring-2 focus:ring-white/50 rounded-lg pl-8 pr-8 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all w-56 focus:w-72 shadow-sm"
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
+                ⌘K
+              </span>
+            </div>
+
+            {/* Admin Quét Drive Nhanh (Chỉ hiển thị cho Admin) */}
+            {isAdmin && (
               <button
-                key={dept.id}
-                onClick={() => {
-                  setActiveFilter(dept.id);
-                  setFilterMissingOnly(false);
-                }}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 ${isActive
-                    ? 'bg-indigo-600 text-white shadow-xs border border-indigo-600 font-semibold'
-                    : 'bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 border border-slate-200'
-                  }`}
+                onClick={handleScanDrive}
+                disabled={isScanningDrive}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-white border border-white text-slate-800 hover:text-sky-900 rounded-lg text-xs font-semibold transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+                title="Admin: Kích hoạt n8n quét và kiểm tra sự tồn tại của toàn bộ file trên Google Drive"
               >
-                <span className={`w-2 h-2 rounded-full ${dept.dot}`} />
-                <span>{dept.label}</span>
-                <span
-                  className={`text-[11px] font-mono px-1.5 py-0.2 rounded-full ${isActive
-                      ? 'bg-indigo-700 text-white'
-                      : 'bg-white text-slate-600 border border-slate-200/80'
+                {isScanningDrive ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                ) : (
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                )}
+                <span className="hidden sm:inline">{isScanningDrive ? 'Đang quét...' : 'Quét Drive'}</span>
+              </button>
+            )}
+
+            {/* Refresh button */}
+            <button
+              onClick={fetchDocuments}
+              disabled={isLoading}
+              className="p-2 bg-white/95 hover:bg-white border border-white text-slate-700 hover:text-sky-700 rounded-lg transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+              title="Làm mới danh sách"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+
+            {/* View toggle */}
+            <div className="flex items-center p-0.5 bg-sky-900/20 backdrop-blur-xs border border-white/30 rounded-lg">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-white/85 hover:text-white'
+                  }`}
+                title="Chế độ Danh sách (List)"
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-white/85 hover:text-white'
+                  }`}
+                title="Chế độ Thẻ (Grid)"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* New Document Button (Chỉ hiển thị cho Admin) */}
+            {isAdmin && (
+              <button
+                onClick={() => setIsUploadModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1b3252] hover:bg-slate-900 active:scale-95 text-white border border-white/25 rounded-lg text-xs font-semibold transition-all shadow-md cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Thêm tài liệu</span>
+                <span className="text-[10px] text-sky-200 font-mono ml-0.5">C</span>
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Sub-header / Filter Pills Bar (Trên nền bầu trời mây trắng) */}
+        <div className="px-6 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar relative z-10 bg-white/15 backdrop-blur-xs">
+          {/* Department Pills */}
+          <div className="flex items-center gap-2">
+            <div className="text-white text-xs uppercase tracking-wider font-bold mr-1 flex items-center gap-1.5 shrink-0 drop-shadow-2xs">
+              <Filter className="w-3.5 h-3.5 text-white" /> Chuyên môn:
+            </div>
+            {DEPARTMENTS.map((dept) => {
+              const isActive = activeFilter === dept.id;
+              const count = departmentCounts[dept.id] || 0;
+              return (
+                <button
+                  key={dept.id}
+                  onClick={() => {
+                    setActiveFilter(dept.id);
+                    setFilterMissingOnly(false);
+                  }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${isActive
+                      ? 'bg-[#1b3252] text-white shadow-md border border-white/40'
+                      : 'bg-white/95 text-slate-800 hover:bg-white border border-white shadow-xs'
                     }`}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+                  <span className={`w-2 h-2 rounded-full ${dept.dot}`} />
+                  <span>{dept.label}</span>
+                  <span
+                    className={`text-[11px] font-mono px-1.5 py-0.2 rounded-full ${isActive
+                        ? 'bg-sky-500 text-white font-bold'
+                        : 'bg-sky-50 text-sky-800 border border-sky-200'
+                      }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

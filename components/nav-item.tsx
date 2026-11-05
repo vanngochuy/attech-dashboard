@@ -8,7 +8,6 @@ interface NavItemProps {
   href: string;
   icon: React.ReactNode;
   label: string;
-  // Với mục chuyên môn: mã chuyên môn (query ?dept=...) để xác định trạng thái đang chọn
   dept?: string;
 }
 
@@ -26,19 +25,25 @@ export default function NavItem({ href, icon, label, dept }: NavItemProps) {
     <Link
       href={href}
       aria-current={isActive ? 'page' : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all group relative text-sm ${
+      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all group relative text-sm ${
         isActive
-          ? 'bg-indigo-100 text-indigo-800 font-bold shadow-xs ring-1 ring-indigo-200'
-          : 'text-slate-600 font-medium hover:text-indigo-600 hover:bg-slate-100'
+          ? 'bg-white text-sky-900 font-bold shadow-md shadow-sky-900/10 ring-1 ring-white'
+          : 'text-white font-semibold hover:bg-white/25 hover:text-white backdrop-blur-[1px]'
       }`}
     >
-      <div className={`transition-colors ${isActive ? 'text-indigo-700' : 'text-slate-400 group-hover:text-indigo-600'}`}>
+      <div
+        className={`transition-colors ${
+          isActive ? 'text-[#0284c7]' : 'text-sky-100 group-hover:text-white'
+        }`}
+      >
         {icon}
       </div>
-      <span>{label}</span>
+      <span className={isActive ? '' : 'drop-shadow-[0_1px_1px_rgba(3,105,161,0.35)]'}>
+        {label}
+      </span>
       <div
-        className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 bg-indigo-600 rounded-r-full transition-all duration-300 ${
-          isActive ? 'h-3/4' : 'h-0 group-hover:h-3/4'
+        className={`absolute left-0 top-1/2 -translate-y-1/2 w-1.5 bg-[#ef2323] rounded-r-full transition-all duration-300 ${
+          isActive ? 'h-3/5' : 'h-0 group-hover:h-1/2 bg-white'
         }`}
       />
     </Link>
