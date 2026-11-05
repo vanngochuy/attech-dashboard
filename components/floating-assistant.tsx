@@ -161,6 +161,60 @@ export default function FloatingAssistant() {
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const launcherBtnRef = useRef<HTMLButtonElement>(null);
 
+  // Vị trí có thể kéo thả tự do của nút Chatbot Robot
+  const [botPos, setBotPos] = useState<{ x: number; y: number } | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; initX: number; initY: number }>({
+    startX: 0,
+    startY: 0,
+    initX: 0,
+    initY: 0,
+  });
+  const hasMovedRef = useRef(false);
+
+  // Kéo thả Chatbot (Pointer Events hỗ trợ cả chuột & màn hình cảm ứng)
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    isDraggingRef.current = true;
+    hasMovedRef.current = false;
+    const currentX = botPos ? botPos.x : window.innerWidth - 74 - 20;
+    const currentY = botPos ? botPos.y : window.innerHeight - 74 - 20;
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initX: currentX,
+      initY: currentY,
+    };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!isDraggingRef.current) return;
+    const dx = e.clientX - dragStartRef.current.startX;
+    const dy = e.clientY - dragStartRef.current.startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      hasMovedRef.current = true;
+    }
+    const newX = Math.max(10, Math.min(window.innerWidth - 84, dragStartRef.current.initX + dx));
+    const newY = Math.max(10, Math.min(window.innerHeight - 84, dragStartRef.current.initY + dy));
+    setBotPos({ x: newX, y: newY });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    isDraggingRef.current = false;
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleBotClick = () => {
+    // Chỉ mở/đóng nếu người dùng nhấn vào nút, không kích hoạt khi đang kéo di chuyển
+    if (!hasMovedRef.current) {
+      setIsOpen(!isOpen);
+    }
+  };
+
   // Tự động thu nhỏ chatbot khi nhấn ra ngoài khu vực hỏi đáp
   useEffect(() => {
     if (!isOpen) return;
@@ -682,17 +736,27 @@ export default function FloatingAssistant() {
         </div>
       )}
 
-      {/* Nút Robot 3D nổi góc phải dưới */}
+      {/* Nút Robot 3D nổi có thể kéo thả di chuyển tự do trên màn hình */}
       <button
         ref={launcherBtnRef}
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-5 right-5 z-40 w-[74px] h-[74px] rounded-full flex items-center justify-center transition-transform duration-200 hover:scale-110 active:scale-95 focus:outline-none group"
-        title={isOpen ? 'Thu nhỏ trợ lý AI' : 'Mở trợ lý AI'}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onClick={handleBotClick}
+        style={
+          botPos
+            ? { left: `${botPos.x}px`, top: `${botPos.y}px`, bottom: 'auto', right: 'auto' }
+            : undefined
+        }
+        className={`fixed z-40 w-[74px] h-[74px] rounded-full flex items-center justify-center transition-transform duration-150 hover:scale-105 active:scale-95 focus:outline-none group touch-none cursor-grab active:cursor-grabbing ${
+          botPos ? '' : 'bottom-5 right-5'
+        }`}
+        title="Kéo thả để di chuyển vị trí, bấm để mở trợ lý AI"
         aria-label="Trợ lý AI"
       >
-        <AnimatedChatbotIcon className="w-[74px] h-[74px]" />
+        <AnimatedChatbotIcon className="w-[74px] h-[74px] pointer-events-none" />
         {selectedDocIds.length > 0 && (
-          <span className="absolute top-0 right-0 min-w-5 h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-sm">
+          <span className="absolute top-0 right-0 min-w-5 h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-sm pointer-events-none">
             {selectedDocIds.length}
           </span>
         )}

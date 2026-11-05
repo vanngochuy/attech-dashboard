@@ -792,27 +792,27 @@ export function SidebarUserStatus() {
 
   if (isAdmin) {
     return (
-      <div className="p-3 rounded-xl bg-white/20 backdrop-blur-md border border-white/35 shadow-xs space-y-2.5">
+      <div className="p-3 rounded-xl bg-white/40 backdrop-blur-[35px] border border-white/60 shadow-xs space-y-2.5">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs border border-white/30">
+          <div className="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs border border-white/50">
             <ShieldCheck className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <p className="text-xs font-bold text-white truncate drop-shadow-2xs">{username || 'huyvn'}</p>
-              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-white/25 text-white border border-white/30">
+              <p className="text-xs font-bold text-[#0f2043] truncate">{username || 'huyvn'}</p>
+              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-sky-600 text-white">
                 Admin
               </span>
             </div>
-            <p className="text-[11px] text-sky-100 truncate">Toàn quyền quản trị</p>
+            <p className="text-[11px] text-[#0f2043]/80 font-medium truncate">Toàn quyền quản trị</p>
           </div>
         </div>
         <button
           onClick={logout}
-          className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-white/20 hover:bg-rose-600/80 text-white border border-white/30 hover:border-rose-400 text-xs font-semibold transition-all backdrop-blur-md shadow-2xs cursor-pointer"
+          className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-white/50 hover:bg-rose-50 text-rose-700 hover:text-rose-800 border border-white/60 hover:border-rose-300 text-xs font-semibold transition-all backdrop-blur-[35px] shadow-2xs cursor-pointer"
           title="Đăng xuất & Hạ cánh về màn hình chính"
         >
-          <PlaneLanding className="w-3.5 h-3.5 text-rose-200" />
+          <PlaneLanding className="w-3.5 h-3.5 text-rose-600" />
           <span>Đăng xuất</span>
         </button>
       </div>
@@ -820,22 +820,22 @@ export function SidebarUserStatus() {
   }
 
   return (
-    <div className="p-3 rounded-xl bg-white/20 backdrop-blur-md border border-white/35 shadow-xs space-y-2.5">
+    <div className="p-3 rounded-xl bg-white/40 backdrop-blur-[35px] border border-white/60 shadow-xs space-y-2.5">
       <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-white/20 text-white flex items-center justify-center text-xs font-semibold shrink-0 border border-white/30">
-          <User className="w-4 h-4" />
+        <div className="w-8 h-8 rounded-lg bg-white/50 text-[#0f2043] flex items-center justify-center text-xs font-semibold shrink-0 border border-white/60">
+          <User className="w-4 h-4 text-[#0f2043]" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-white truncate drop-shadow-2xs">Nhân viên tra cứu</p>
-          <p className="text-[11px] text-sky-100 truncate">Quyền: Xem &amp; Hỏi Chatbot</p>
+          <p className="text-xs font-bold text-[#0f2043] truncate">Nhân viên tra cứu</p>
+          <p className="text-[11px] text-[#0f2043]/80 font-medium truncate">Quyền: Xem &amp; Hỏi Chatbot</p>
         </div>
       </div>
       <button
         onClick={logout}
-        className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-white/20 hover:bg-amber-600/80 text-white border border-white/30 hover:border-amber-400 text-xs font-semibold transition-all backdrop-blur-md shadow-2xs cursor-pointer"
+        className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-white/50 hover:bg-amber-50 text-amber-800 hover:text-amber-900 border border-white/60 hover:border-amber-300 text-xs font-semibold transition-all backdrop-blur-[35px] shadow-2xs cursor-pointer"
         title="Thoát phiên tra cứu hoặc chuyển sang tài khoản Admin"
       >
-        <LogOut className="w-3.5 h-3.5 text-amber-200" />
+        <LogOut className="w-3.5 h-3.5 text-amber-600" />
         <span>Thoát / Đổi tài khoản</span>
       </button>
     </div>

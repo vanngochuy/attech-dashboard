@@ -380,18 +380,18 @@ export default function TrainingRecordsPage() {
           </div>
 
           <div className="flex items-center gap-2.5 ml-auto">
-            <div className="hidden md:flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-white/30 text-xs text-white shadow-xs drop-shadow-2xs">
-              <span className="p-0.5 rounded bg-white/20 border border-white/30">
-                <Upload className="w-3.5 h-3.5 text-white" />
+            <div className="hidden md:flex items-center gap-1.5 bg-white/40 backdrop-blur-[35px] px-2.5 py-1.5 rounded-lg border border-white/60 text-xs text-[#0f2043] shadow-xs">
+              <span className="p-0.5 rounded bg-white/50 border border-white/60 text-sky-700">
+                <Upload className="w-3.5 h-3.5" />
               </span>
-              <span className="text-sky-100 font-medium">Drive:</span>
-              <span className="text-white font-bold font-mono">01_CHỨNG CHỈ</span>
+              <span className="text-[#0f2043] font-semibold">Drive:</span>
+              <span className="text-[#0f2043] font-bold font-mono">01_CHỨNG CHỈ</span>
             </div>
 
             <button
               onClick={fetchTrainingRecords}
               disabled={isLoading}
-              className="p-2 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/50 text-white rounded-lg transition-colors backdrop-blur-md shadow-xs disabled:opacity-50 cursor-pointer drop-shadow-2xs"
+              className="p-2 bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] rounded-lg transition-colors backdrop-blur-[35px] shadow-xs disabled:opacity-50 cursor-pointer"
               title="Làm mới danh sách"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />

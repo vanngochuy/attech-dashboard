@@ -375,12 +375,12 @@ function DocumentsContent() {
           <div className="flex items-center gap-2.5 ml-auto">
             {/* Trạng thái Google Drive dạng mờ Glassmorphism (bỏ Supabase Ready) */}
             <div className="hidden lg:flex items-center mr-1">
-              <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-white/30 text-xs text-white shadow-xs drop-shadow-2xs">
-                <span className="p-0.5 rounded bg-white/20 border border-white/30">
-                  <Cloud className="w-3.5 h-3.5 text-white" />
+              <div className="flex items-center gap-1.5 bg-white/40 backdrop-blur-[35px] px-2.5 py-1.5 rounded-lg border border-white/60 text-xs shadow-xs">
+                <span className="p-0.5 rounded bg-white/50 border border-white/60 text-sky-700">
+                  <Cloud className="w-3.5 h-3.5" />
                 </span>
-                <span className="text-sky-100 font-medium">Drive:</span>
-                <span className="text-emerald-300 font-bold font-mono">Synced</span>
+                <span className="text-[#0f2043] font-semibold">Drive:</span>
+                <span className="text-emerald-700 font-bold font-mono">Synced</span>
               </div>
             </div>
 
@@ -389,17 +389,17 @@ function DocumentsContent() {
               <button
                 onClick={handleScanDrive}
                 disabled={isScanningDrive}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/50 text-white rounded-lg text-xs font-semibold transition-all backdrop-blur-md shadow-xs disabled:opacity-50 cursor-pointer drop-shadow-2xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] rounded-lg text-xs font-semibold transition-all backdrop-blur-[35px] shadow-xs disabled:opacity-50 cursor-pointer"
                 title="Admin: Kích hoạt n8n quét và kiểm tra sự tồn tại của toàn bộ file trên Google Drive"
               >
-                <span className="p-0.5 rounded bg-white/20 border border-white/30">
+                <span className="p-0.5 rounded bg-white/50 border border-white/60 text-amber-700">
                   {isScanningDrive ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-200" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <ShieldAlert className="w-3.5 h-3.5 text-amber-200" />
+                    <ShieldAlert className="w-3.5 h-3.5" />
                   )}
                 </span>
-                <span className="hidden sm:inline">{isScanningDrive ? 'Đang quét...' : 'Quét Drive'}</span>
+                <span className="hidden sm:inline font-semibold">{isScanningDrive ? 'Đang quét...' : 'Quét Drive'}</span>
               </button>
             )}
 
@@ -407,7 +407,7 @@ function DocumentsContent() {
             <button
               onClick={fetchDocuments}
               disabled={isLoading}
-              className="p-2 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/50 text-white rounded-lg transition-colors backdrop-blur-md shadow-xs disabled:opacity-50 cursor-pointer drop-shadow-2xs"
+              className="p-2 bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] rounded-lg transition-colors backdrop-blur-[35px] shadow-xs disabled:opacity-50 cursor-pointer"
               title="Làm mới danh sách"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -448,7 +448,7 @@ function DocumentsContent() {
         </header>
 
         {/* Sub-header / Filter Pills Bar (Dạng mờ Glassmorphism trên nền bầu trời mây trắng) */}
-        <div className="px-6 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar relative z-10 bg-white/10 backdrop-blur-sm border-t border-white/20">
+        <div className="px-6 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar relative z-10 bg-white/20 backdrop-blur-[35px] border-t border-white/40">
           {/* Department Pills */}
           <div className="flex items-center gap-2">
             {DEPARTMENTS.map((dept) => {
@@ -462,27 +462,27 @@ function DocumentsContent() {
                     setActiveFilter(dept.id);
                     setFilterMissingOnly(false);
                   }}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs transition-all shrink-0 cursor-pointer ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs transition-all shrink-0 cursor-pointer font-semibold ${
                     isActive
-                      ? 'bg-white text-sky-950 font-bold shadow-md border border-white'
-                      : 'bg-white/20 hover:bg-white/30 text-white hover:text-white font-medium border border-white/30 hover:border-white/50 backdrop-blur-md shadow-xs drop-shadow-2xs'
+                      ? 'bg-white/95 text-[#0f2043] font-bold shadow-md border border-white'
+                      : 'bg-white/40 hover:bg-white/55 text-[#0f2043] font-semibold border border-white/60 hover:border-white/80 backdrop-blur-[35px] shadow-xs'
                   }`}
                 >
                   <span
                     className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                       isActive
                         ? 'bg-sky-600 text-white shadow-2xs'
-                        : 'bg-white/20 backdrop-blur-md border border-white/30 text-white shadow-2xs'
+                        : 'bg-white/50 backdrop-blur-[35px] border border-white/70 text-[#0f2043] shadow-2xs'
                     }`}
                   >
                     <DeptIcon className="w-3 h-3" />
                   </span>
-                  <span>{dept.label}</span>
+                  <span className="text-[#0f2043]">{dept.label}</span>
                   <span
                     className={`text-[11px] font-mono px-1.5 py-0.2 rounded-full transition-colors ${
                       isActive
                         ? 'bg-sky-100 text-sky-800 font-bold border border-sky-200'
-                        : 'bg-white/20 text-white font-semibold border border-white/25'
+                        : 'bg-white/50 text-[#0f2043] font-bold border border-white/60'
                     }`}
                   >
                     {count}

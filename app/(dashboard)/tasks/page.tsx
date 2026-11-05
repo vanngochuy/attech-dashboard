@@ -698,23 +698,23 @@ export default function EmailDocumentTasksPage() {
               </div>
             )}
 
-            <div className="hidden md:flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-white/30 text-xs text-white shadow-xs drop-shadow-2xs">
-              <span className="p-0.5 rounded bg-white/20 border border-white/30">
-                <MailSearch className="w-3.5 h-3.5 text-white" />
+            <div className="hidden md:flex items-center gap-1.5 bg-white/40 backdrop-blur-[35px] px-2.5 py-1.5 rounded-lg border border-white/60 text-xs text-[#0f2043] shadow-xs">
+              <span className="p-0.5 rounded bg-white/50 border border-white/60 text-sky-700">
+                <MailSearch className="w-3.5 h-3.5" />
               </span>
-              <span className="text-sky-100 font-medium">Hộp thư:</span>
-              <span className="text-white font-bold font-mono">tuh@attech.com.vn</span>
+              <span className="text-[#0f2043] font-semibold">Hộp thư:</span>
+              <span className="text-[#0f2043] font-bold font-mono">tuh@attech.com.vn</span>
             </div>
 
             {/* Nút Quét Email & Đối chiếu thường (Glassmorphism) */}
             <button
               onClick={handleScanEmailsByDateRange}
               disabled={isScanning}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white hover:text-white border border-white/30 hover:border-white/50 rounded-lg text-xs font-semibold transition-all backdrop-blur-md shadow-xs cursor-pointer disabled:opacity-60 drop-shadow-2xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/55 text-[#0f2043] hover:text-[#0f2043] border border-white/60 hover:border-white/80 rounded-lg text-xs font-semibold transition-all backdrop-blur-[35px] shadow-xs cursor-pointer disabled:opacity-60"
               title="Quét Email theo khoảng thời gian và đối chiếu với kho Tài liệu chính thức"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-white ${isScanning ? 'animate-spin' : ''}`} />
-              <span>{isScanning ? 'Đang quét...' : 'Quét Email & Đối chiếu'}</span>
+              <RefreshCw className={`w-3.5 h-3.5 text-sky-700 ${isScanning ? 'animate-spin' : ''}`} />
+              <span className="font-semibold">{isScanning ? 'Đang quét...' : 'Quét Email & Đối chiếu'}</span>
             </button>
 
             {/* Nút Quét Email & Đồng bộ Drive THỦ CÔNG DÀNH RIÊNG CHO ADMIN */}
