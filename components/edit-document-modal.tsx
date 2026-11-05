@@ -23,7 +23,7 @@ import {
 
 const SCOPE_OPTIONS = [
   { value: 'VB_PHAP_LUAT', label: 'Văn bản Pháp luật & Quy chế', dot: 'bg-blue-500', desc: 'Luật, Nghị định, Thông tư, Quy chế chung' },
-  { value: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật (CNS, Selex, TUH)', dot: 'bg-indigo-500', desc: 'CNS, Selex, DVOR/DME, Radar, HDCV, TUH' },
+  { value: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật', dot: 'bg-indigo-500', desc: 'CNS, Selex, DVOR/DME, Radar, HDCV, TUH' },
   { value: 'SMS', label: 'An toàn (SMS)', dot: 'bg-emerald-500', desc: 'Hệ thống an toàn, Báo cáo sự cố' },
   { value: 'PCCC_CHCN', label: 'PCCC & CHCN', dot: 'bg-rose-500', desc: 'Phòng cháy chữa cháy & Cứu nạn' },
   { value: 'PCTT_TKCN', label: 'PCTT & TKCN', dot: 'bg-cyan-500', desc: 'Phòng chống thiên tai & TKCN' },

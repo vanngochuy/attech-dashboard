@@ -51,14 +51,14 @@ import ThemeToggleButton from '@/components/theme-toggle-button';
 
 // Danh mục Chuyên môn
 const DEPARTMENTS = [
-  { id: 'ALL', label: 'Tất cả', dot: 'bg-slate-400', icon: Layers },
-  { id: 'VB_PHAP_LUAT', label: 'Văn bản Pháp luật & Quy chế', dot: 'bg-blue-500', icon: Scale },
-  { id: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật (CNS, Selex)', dot: 'bg-indigo-500', icon: Wrench },
-  { id: 'SMS', label: 'An toàn (SMS)', dot: 'bg-emerald-500', icon: ShieldCheck },
-  { id: 'PCCC_CHCN', label: 'PCCC & CHCN', dot: 'bg-rose-500', icon: Flame },
-  { id: 'PCTT_TKCN', label: 'PCTT & TKCN', dot: 'bg-cyan-500', icon: Waves },
-  { id: 'ATVSLD', label: 'An toàn VSLĐ', dot: 'bg-amber-500', icon: HardHat },
-  { id: 'CONG_TRINH_HK', label: 'Công trình Hàng không', dot: 'bg-purple-500', icon: Building2 },
+  { id: 'ALL', label: 'Tất cả', shortLabel: 'Tất cả', dot: 'bg-slate-400', icon: Layers },
+  { id: 'VB_PHAP_LUAT', label: 'Văn bản Pháp luật & Quy chế', shortLabel: 'VB Pháp luật', dot: 'bg-blue-500', icon: Scale },
+  { id: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật', shortLabel: 'QLKT', dot: 'bg-indigo-500', icon: Wrench },
+  { id: 'SMS', label: 'An toàn (SMS)', shortLabel: 'SMS', dot: 'bg-emerald-500', icon: ShieldCheck },
+  { id: 'PCCC_CHCN', label: 'PCCC & CHCN', shortLabel: 'PCCC & CHCN', dot: 'bg-rose-500', icon: Flame },
+  { id: 'PCTT_TKCN', label: 'PCTT & TKCN', shortLabel: 'PCTT & TKCN', dot: 'bg-cyan-500', icon: Waves },
+  { id: 'ATVSLD', label: 'An toàn VSLĐ', shortLabel: 'ATVSLĐ', dot: 'bg-amber-500', icon: HardHat },
+  { id: 'CONG_TRINH_HK', label: 'Công trình Hàng không', shortLabel: 'CTHK', dot: 'bg-purple-500', icon: Building2 },
 ];
 
 // Hàm bỏ dấu tiếng Việt & ký tự đặc biệt để hỗ trợ tìm kiếm từ khóa thông minh (không cần gõ đúng nguyên văn)
@@ -282,7 +282,16 @@ function DocumentsContent() {
 
   const getDeptConfig = (code: string) => {
     const found = DEPARTMENTS.find((d) => d.id === code);
-    return found || { id: code, label: code || 'Chung', dot: 'bg-slate-400', icon: FileText };
+    if (found) return found;
+
+    // Rút gọn thông minh cho các tên/mã chuyên môn tự do
+    const lower = (code || '').toLowerCase();
+    let short = code || 'Chung';
+    if (lower.includes('quản lý kỹ thuật') || lower.includes('quan ly ky thuat') || lower.includes('ql_ky_thuat')) short = 'QLKT';
+    else if (lower.includes('công trình hàng không') || lower.includes('cong trinh hang khong') || lower.includes('cong_trinh_hk')) short = 'CTHK';
+    else if (lower.includes('cục hàng không') || lower.includes('cuc hang khong') || lower.includes('chk') || lower.includes('caav')) short = 'CHK';
+
+    return { id: code, label: code || 'Chung', shortLabel: short, dot: 'bg-slate-400', icon: FileText };
   };
 
   const getFileIcon = (fileName: string) => {
@@ -877,11 +886,14 @@ function DocumentsContent() {
                                 : '---'}
                             </span>
 
-                            {/* Chuyên môn */}
+                            {/* Chuyên môn (Rút gọn: QLKT, CTHK, CHK...) */}
                             <span className="w-32 text-center hidden lg:inline">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                              <span
+                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+                                title={`Chuyên môn: ${dept.label}`}
+                              >
                                 <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
-                                <span className="truncate max-w-[100px]">{dept.label}</span>
+                                <span className="truncate max-w-[100px]">{dept.shortLabel || dept.label}</span>
                               </span>
                             </span>
 
@@ -1102,12 +1114,15 @@ function DocumentsContent() {
                           </span>
                         </div>
 
-                        {/* Chuyên môn */}
+                        {/* Chuyên môn (Rút gọn: QLKT, CTHK, CHK...) */}
                         <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
                           <span className="text-slate-500 font-medium">Chuyên môn:</span>
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          <span
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+                            title={`Chuyên môn: ${dept.label}`}
+                          >
                             <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
-                            <span className="truncate max-w-[120px]">{dept.label}</span>
+                            <span className="truncate max-w-[120px]">{dept.shortLabel || dept.label}</span>
                           </span>
                         </div>
                       </div>

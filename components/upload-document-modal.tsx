@@ -20,7 +20,7 @@ import {
 
 const SCOPE_OPTIONS = [
   { value: 'VB_PHAP_LUAT', label: 'Văn bản Pháp luật & Quy chế', dot: 'bg-blue-500' },
-  { value: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật (CNS, Selex, TUH)', dot: 'bg-indigo-500' },
+  { value: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật', dot: 'bg-indigo-500' },
   { value: 'SMS', label: 'An toàn (SMS)', dot: 'bg-emerald-500' },
   { value: 'PCCC_CHCN', label: 'PCCC & CHCN', dot: 'bg-rose-500' },
   { value: 'PCTT_TKCN', label: 'PCTT & TKCN', dot: 'bg-cyan-500' },
