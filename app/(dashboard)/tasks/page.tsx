@@ -436,7 +436,7 @@ export default function EmailDocumentTasksPage() {
             <div className="hidden lg:flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
               <FolderGit2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               <span className="text-slate-600 font-medium">Google Drive:</span>
-              <span className="text-amber-700 font-bold font-mono">ATTECH_DOCUMENTS/TÀI LIỆU CHƯA XÁC THỰC</span>
+              <span className="text-amber-700 font-bold font-mono">ATTECH_DOCUMENTS/03_TÀI LIỆU CHƯA XÁC THỰC</span>
             </div>
 
             <button
