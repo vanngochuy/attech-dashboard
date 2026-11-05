@@ -48,6 +48,7 @@ import { useAssistant } from '@/components/assistant-context';
 import { useAuth } from '@/components/auth-context';
 import { useTheme } from '@/components/theme-context';
 import ThemeToggleButton from '@/components/theme-toggle-button';
+import UserAvatarMenu from '@/components/user-avatar-menu';
 
 // Danh mục Chuyên môn
 const DEPARTMENTS = [
@@ -485,6 +486,9 @@ function DocumentsContent() {
                 <span className="text-[10px] text-sky-200 font-mono ml-0.5">C</span>
               </button>
             )}
+
+            {/* Menu Tài khoản User hình tròn góc phải trên cùng */}
+            <UserAvatarMenu />
           </div>
         </header>
 

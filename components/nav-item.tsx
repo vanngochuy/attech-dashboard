@@ -10,9 +10,10 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   dept?: string;
+  isCollapsed?: boolean;
 }
 
-export default function NavItem({ href, icon, label, dept }: NavItemProps) {
+export default function NavItem({ href, icon, label, dept, isCollapsed = false }: NavItemProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentDept = searchParams.get('dept');
@@ -27,8 +28,11 @@ export default function NavItem({ href, icon, label, dept }: NavItemProps) {
   return (
     <Link
       href={href}
+      title={label}
       aria-current={isActive ? 'page' : undefined}
-      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all group relative text-sm font-semibold ${
+      className={`flex items-center transition-all group relative text-sm font-semibold ${
+        isCollapsed ? 'justify-center p-2.5 rounded-xl' : 'gap-3 px-3.5 py-2.5 rounded-xl'
+      } ${
         isDeepAero
           ? isActive
             ? 'sidebar-nav-item-deep-aero active'
@@ -51,9 +55,19 @@ export default function NavItem({ href, icon, label, dept }: NavItemProps) {
       >
         {icon}
       </div>
-      <span className={isDeepAero ? (isActive ? 'text-white font-semibold' : 'text-slate-200 group-hover:text-white') : 'text-[#0f2043] font-semibold'}>
-        {label}
-      </span>
+      {!isCollapsed && (
+        <span
+          className={`truncate transition-all duration-200 ${
+            isDeepAero
+              ? isActive
+                ? 'text-white font-semibold'
+                : 'text-slate-200 group-hover:text-white'
+              : 'text-[#0f2043] font-semibold'
+          }`}
+        >
+          {label}
+        </span>
+      )}
       <div
         className={`absolute left-0 top-1/2 -translate-y-1/2 w-1.5 bg-[#ef2323] rounded-r-full transition-all duration-300 ${
           isActive ? 'h-3/5' : 'h-0 group-hover:h-1/2 bg-[#0284c7]'

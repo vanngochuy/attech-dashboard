@@ -1,15 +1,44 @@
 'use client';
 
-import React, { Suspense } from 'react';
-import { CheckSquare, FileText, Award, GraduationCap } from 'lucide-react';
+import React, { Suspense, useState, useEffect } from 'react';
+import { CheckSquare, FileText, Award, GraduationCap, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import NavItem from '@/components/nav-item';
 import { AssistantProvider } from '@/components/assistant-context';
 import FloatingAssistant from '@/components/floating-assistant';
-import { AuthProvider, SidebarUserStatus } from '@/components/auth-context';
+import { AuthProvider } from '@/components/auth-context';
 import { ThemeProvider, useTheme } from '@/components/theme-context';
 
 function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const { isDeepAero } = useTheme();
+
+  // Quản lý trạng thái thu nhỏ / mở rộng của Sidebar
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Khôi phục tùy chọn thu nhỏ từ localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('attech_sidebar_collapsed');
+      if (saved === 'true') setIsCollapsed(true);
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const toggleCollapse = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('attech_sidebar_collapsed', String(next));
+      } catch {
+        // Ignore
+      }
+      return next;
+    });
+  };
+
+  // Sidebar mở rộng khi không thu nhỏ, hoặc khi người dùng di chuột đến
+  const isExpanded = !isCollapsed || isHovered;
 
   return (
     <div className={`flex h-screen w-full overflow-hidden font-sans selection:bg-sky-500/20 ${isDeepAero ? 'bg-[#071324] text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
@@ -24,9 +53,13 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
         }
       `}</style>
 
-      {/* Sidebar: Hỗ trợ linh hoạt 2 chủ đề: Sky Cloud (mặc định) & Deep Aero (Khí quyển sâu & Glassmorphism) */}
+      {/* Sidebar: Thu nhỏ ẩn về bên trái, tự mở ra khi di chuột đến, có nút bật/tắt ở dưới cùng */}
       <aside
-        className={`w-64 flex-shrink-0 flex flex-col transition-colors duration-300 relative z-20 shadow-md overflow-hidden border-r ${
+        onMouseEnter={() => isCollapsed && setIsHovered(true)}
+        onMouseLeave={() => isCollapsed && setIsHovered(false)}
+        className={`${
+          isExpanded ? 'w-64' : 'w-16'
+        } flex-shrink-0 flex flex-col transition-[width] duration-300 ease-in-out relative z-20 shadow-md overflow-hidden border-r ${
           isDeepAero
             ? 'deep-aero-bg border-sky-950/80 shadow-sky-950/50'
             : 'bg-gradient-to-b from-[#0284c7] via-[#38bdf8] to-[#bae6fd] border-sky-300/80'
@@ -61,18 +94,20 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {/* Cụm Logo ATTECH (Bỏ hoàn toàn khung viền, chỉ giữ logo và chữ nổi bật trên nền mây) */}
-        <div className={`h-14 flex items-center px-5 border-b relative z-10 ${isDeepAero ? 'border-white/10' : 'border-white/20'}`}>
+        {/* Cụm Logo ATTECH */}
+        <div className={`h-14 flex items-center ${isExpanded ? 'px-5' : 'justify-center px-0'} border-b relative z-10 transition-all ${isDeepAero ? 'border-white/10' : 'border-white/20'}`}>
           <div className="flex items-center gap-2.5 select-none">
             <img
               src="/attech-logo.png"
               alt="ATTECH Logo"
               className="w-8 h-8 rounded-full object-contain shrink-0 drop-shadow-[0_2px_6px_rgba(0,0,0,0.18)]"
             />
-            <span className="font-extrabold text-xl tracking-wider select-none drop-shadow-[0_2px_4px_rgba(2,132,199,0.5)]">
-              <span className="text-[#ef2323]">A</span>
-              <span className="text-white">TTECH</span>
-            </span>
+            {isExpanded && (
+              <span className="font-extrabold text-xl tracking-wider select-none drop-shadow-[0_2px_4px_rgba(2,132,199,0.5)] truncate">
+                <span className="text-[#ef2323]">A</span>
+                <span className="text-white">TTECH</span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -80,19 +115,49 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
           <Suspense fallback={null}>
             {/* Main Menu */}
             <div className="space-y-1.5">
-              <h3 className={`px-3 text-[11px] font-bold uppercase tracking-wider mb-2 drop-shadow-2xs ${isDeepAero ? 'text-sky-300/80' : 'text-white/90'}`}>
-                Danh mục quản lý
-              </h3>
-              <NavItem href="/documents" icon={<FileText size={18} />} label="Tài liệu" />
-              <NavItem href="/licenses" icon={<Award size={18} />} label="Giấy phép khai thác" />
-              <NavItem href="/training" icon={<GraduationCap size={18} />} label="Hồ sơ huấn luyện" />
-              <NavItem href="/tasks" icon={<CheckSquare size={18} />} label="Công việc" />
+              {isExpanded ? (
+                <h3 className={`px-3 text-[11px] font-bold uppercase tracking-wider mb-2 drop-shadow-2xs transition-all ${isDeepAero ? 'text-sky-300/80' : 'text-white/90'}`}>
+                  Danh mục quản lý
+                </h3>
+              ) : (
+                <div className="h-2" />
+              )}
+              <NavItem href="/documents" icon={<FileText size={18} />} label="Tài liệu" isCollapsed={!isExpanded} />
+              <NavItem href="/licenses" icon={<Award size={18} />} label="Giấy phép khai thác" isCollapsed={!isExpanded} />
+              <NavItem href="/training" icon={<GraduationCap size={18} />} label="Hồ sơ huấn luyện" isCollapsed={!isExpanded} />
+              <NavItem href="/tasks" icon={<CheckSquare size={18} />} label="Công việc" isCollapsed={!isExpanded} />
             </div>
           </Suspense>
         </nav>
 
-        <div className={`p-4 border-t relative z-10 ${isDeepAero ? 'border-white/10' : 'border-white/30'}`}>
-          <SidebarUserStatus />
+        {/* Nút tắt/mở thu nhỏ Sidebar ở dưới cùng */}
+        <div className={`p-2.5 border-t relative z-10 transition-all ${isDeepAero ? 'border-white/10' : 'border-white/30'}`}>
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            className={`w-full flex items-center ${
+              isExpanded ? 'justify-between px-3' : 'justify-center px-0'
+            } py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-xs border ${
+              isDeepAero
+                ? 'bg-white/[0.06] hover:bg-white/[0.12] text-slate-200 hover:text-white border-white/10'
+                : 'bg-white/40 hover:bg-white/60 text-[#0f2043] border-white/60 backdrop-blur-[35px]'
+            }`}
+            title={isCollapsed ? 'Mở rộng cố định Sidebar' : 'Thu nhỏ Sidebar (tự mở khi rê chuột)'}
+          >
+            <div className="flex items-center gap-2">
+              {isCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4 text-sky-500 shrink-0" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4 text-sky-600 shrink-0" />
+              )}
+              {isExpanded && <span>{isCollapsed ? 'Mở rộng menu' : 'Thu nhỏ menu'}</span>}
+            </div>
+            {isExpanded && (
+              <span className="text-[10px] font-mono opacity-60">
+                {isCollapsed ? 'MINI' : 'FULL'}
+              </span>
+            )}
+          </button>
         </div>
       </aside>
 

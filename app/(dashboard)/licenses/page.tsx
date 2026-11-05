@@ -25,6 +25,7 @@ import { PDFDocument } from 'pdf-lib';
 import { useAuth } from '@/components/auth-context';
 import { useTheme } from '@/components/theme-context';
 import ThemeToggleButton from '@/components/theme-toggle-button';
+import UserAvatarMenu from '@/components/user-avatar-menu';
 import {
   LicenseItem,
   DEFAULT_LICENSES,
@@ -497,6 +498,9 @@ export default function OperatingLicensesPage() {
                 <span>Thêm giấy phép</span>
               </button>
             )}
+
+            {/* Menu Tài khoản User hình tròn góc phải trên cùng */}
+            <UserAvatarMenu />
           </div>
         </header>
       </div>

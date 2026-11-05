@@ -21,6 +21,7 @@ import {
 import { useAuth } from '@/components/auth-context';
 import { useTheme } from '@/components/theme-context';
 import ThemeToggleButton from '@/components/theme-toggle-button';
+import UserAvatarMenu from '@/components/user-avatar-menu';
 import {
   StaffTrainingRecord,
   CertificateRow,
@@ -431,6 +432,9 @@ export default function TrainingRecordsPage() {
                 <span>Thêm nhân viên</span>
               </button>
             )}
+
+            {/* Menu Tài khoản User hình tròn góc phải trên cùng */}
+            <UserAvatarMenu />
           </div>
         </header>
       </div>

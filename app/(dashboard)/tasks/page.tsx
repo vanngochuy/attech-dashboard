@@ -33,6 +33,7 @@ import { PDFDocument } from 'pdf-lib';
 import { useAuth } from '@/components/auth-context';
 import { useTheme } from '@/components/theme-context';
 import ThemeToggleButton from '@/components/theme-toggle-button';
+import UserAvatarMenu from '@/components/user-avatar-menu';
 import {
   EmailDraftItem,
   DEFAULT_EMAIL_DRAFTS,
@@ -774,6 +775,9 @@ export default function EmailDocumentTasksPage() {
                 <span>Tải PDF từ Email</span>
               </button>
             )}
+
+            {/* Menu Tài khoản User hình tròn góc phải trên cùng */}
+            <UserAvatarMenu />
           </div>
         </header>
       </div>
