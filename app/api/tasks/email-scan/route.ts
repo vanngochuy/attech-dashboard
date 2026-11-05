@@ -52,6 +52,67 @@ function computeSimilarity(titleA: string, titleB: string): number {
   return union > 0 ? inter / union : 0;
 }
 
+function cleanDocumentCode(text: string): string {
+  if (!text) return '';
+  // Tìm mẫu số hiệu văn bản: Số + gạch/chéo + chữ hoa (có thể có QĐ, TB, BC, TT, NĐ, QLB, BXD, KTQLB, CHK...)
+  const m = text.match(/\b(\d+)\s*[-/]\s*([A-Za-zĐđ0-9\-_/]+)\b/);
+  if (!m) return '';
+  const num = m[1];
+  let tail = m[2]
+    .replace(/\.pdf$/i, '')
+    .replace(/[_\s]+/g, '-')
+    .replace(/-(?:fwd|fw|re|copy|\d+)$/i, '')
+    .replace(/-(?:fwd|fw|re|copy|\d+)$/i, '')
+    .toUpperCase();
+
+  tail = tail.replace(/\bQD\b/g, 'QĐ').replace(/\bND\b/g, 'NĐ');
+  return `${num}/${tail}`;
+}
+
+/**
+ * Tự động bóc tách Số hiệu, Cơ quan ban hành và Tên văn bản từ Tên file PDF và Tiêu đề Email
+ * (Hoạt động tức thì 0ms, 0đ, không phụ thuộc vào quota AI Gemini)
+ */
+function heuristicExtractFromText(pdfFileName: string, emailSubject?: string): {
+  code: string;
+  issuer: string;
+  title: string;
+} {
+  const cleanName = (pdfFileName || '').replace(/\.pdf$/i, '').trim();
+  const fullText = `${cleanName} ${emailSubject || ''}`;
+
+  // 1. Tìm số hiệu văn bản (Ví dụ: 8634/BXD-VP, 7426/QLB-VPTCT, 346/QĐ-KTQLB, 8067/QLB-VSTBPN, 1550/TTHK-CSDL...)
+  const code = cleanDocumentCode(cleanName) || cleanDocumentCode(emailSubject || '');
+
+  // 2. Nhận diện Cơ quan ban hành từ Mã ký hiệu hoặc tên viết tắt
+  let issuer = 'Công ty TNHH Kỹ thuật Quản lý bay';
+  const upper = fullText.toUpperCase();
+  if (upper.includes('BXD') || upper.includes('BỘ XÂY DỰNG')) {
+    issuer = 'Bộ Xây dựng';
+  } else if (upper.includes('BGTVT') || upper.includes('BỘ GTVT') || upper.includes('BỘ GIAO THÔNG')) {
+    issuer = 'Bộ Giao thông Vận tải';
+  } else if (upper.includes('CHK') || upper.includes('CỤC HÀNG KHÔNG')) {
+    issuer = 'Cục Hàng không Việt Nam';
+  } else if (upper.includes('QLB') || upper.includes('VATM') || upper.includes('TỔNG CÔNG TY QUẢN LÝ BAY')) {
+    issuer = 'Tổng công ty Quản lý bay VN';
+  } else if (upper.includes('TTHK') || upper.includes('TRUNG TÂM')) {
+    issuer = 'Trung tâm Quản lý luồng không lưu';
+  } else if (upper.includes('CVMB') || upper.includes('CẢNG VỤ')) {
+    issuer = 'Cảng vụ Hàng không miền Bắc';
+  }
+
+  // 3. Chuẩn hóa tên tiêu đề
+  let title = cleanName;
+  if (emailSubject && emailSubject.length > 5) {
+    const cleanSubj = emailSubject.replace(/^(?:Fwd:\s*|Re:\s*|\[.*?\]\s*)+/i, '').trim();
+    if (cleanSubj.length > 5) {
+      title = cleanSubj;
+    }
+  }
+
+  return { code, issuer, title };
+}
+
 /**
  * So sánh một văn bản PDF từ Email (chưa chính thức) với toàn bộ văn bản chính thức trong mảng `officialDocs`
  */
@@ -255,6 +316,7 @@ export async function POST(req: Request) {
                     d.pdfFileName === item.pdfFileName
                 );
                 if (!exists) {
+                  const heuristic = heuristicExtractFromText(item.pdfFileName, item.emailSubject);
                   currentDrafts.unshift({
                     id: `edraft-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                     emailSubject: item.emailSubject || item.pdfFileName,
@@ -263,15 +325,16 @@ export async function POST(req: Request) {
                       item.receivedDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
                     pdfFileName: item.pdfFileName,
                     extractedTitle:
-                      item.extractedTitle || item.pdfFileName.replace(/\.pdf$/i, ''),
-                    extractedCode: item.extractedCode || '',
-                    extractedIssuer: item.extractedIssuer || 'ATTECH',
-                    extractedIssueDate: item.extractedIssueDate || '',
+                      item.extractedTitle || heuristic.title,
+                    extractedCode: item.extractedCode || heuristic.code,
+                    extractedIssuer: item.extractedIssuer || heuristic.issuer,
+                    extractedIssueDate: item.extractedIssueDate || (item.receivedDate ? item.receivedDate.slice(0, 10) : ''),
                     scopeDomain: item.scopeDomain || 'QL_KY_THUAT',
                     fileUrl: item.fileUrl || '',
                     driveFolderName: 'ATTECH_DOCUMENTS/03_TÀI LIỆU CHƯA XÁC THỰC',
                     driveFileId: item.driveFileId,
                     matchType: 'NEW_DRAFT',
+                    aiExtracted: false,
                   });
                   n8nFetchedCount++;
                 }
@@ -432,6 +495,101 @@ export async function POST(req: Request) {
       }
 
       return NextResponse.json({ success: true, importedCount, emailDrafts: updated });
+    }
+
+    // 5. Hành động: Làm giàu siêu tốc (0ms, 0đ) toàn bộ số hiệu, đơn vị ban hành từ Heuristic Regex tiếng Việt
+    if (action === 'BATCH_HEURISTIC_ENRICH') {
+      let enrichedCount = 0;
+      const reEvaluated: EmailDraftItem[] = [];
+
+      for (const draft of currentDrafts) {
+        let code = draft.extractedCode;
+        let issuer = draft.extractedIssuer;
+        let title = draft.extractedTitle;
+
+        if (!code || code === '' || !issuer || issuer === 'ATTECH') {
+          const h = heuristicExtractFromText(draft.pdfFileName, draft.emailSubject);
+          if (h.code && (!code || code === '')) code = h.code;
+          if (h.issuer && (!issuer || issuer === 'ATTECH')) issuer = h.issuer;
+          if (h.title && (!title || title === draft.pdfFileName)) title = h.title;
+          enrichedCount++;
+        }
+
+        const comp = matchAgainstOfficialDocuments(officialDocs, title, code);
+        reEvaluated.push({
+          ...draft,
+          extractedCode: code,
+          extractedIssuer: issuer,
+          extractedTitle: title,
+          matchType: comp.matchType,
+          similarityScore: comp.similarityScore,
+          matchedOfficialDoc: comp.matchedOfficialDoc || draft.matchedOfficialDoc,
+          comparisonSummary: comp.comparisonSummary,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      if (supabase) {
+        const blob = new Blob([JSON.stringify(reEvaluated, null, 2)], { type: 'application/json' });
+        await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
+          contentType: 'application/json',
+          upsert: true,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        enrichedCount,
+        emailDrafts: reEvaluated,
+      });
+    }
+
+    // 6. Hành động: Cập nhật kết quả AI Gemini đã đọc 2 trang đầu của 1 file PDF cụ thể
+    if (action === 'AI_EXTRACT_SINGLE' && body.draftId) {
+      const draftIndex = currentDrafts.findIndex((d) => d.id === body.draftId);
+      if (draftIndex === -1) {
+        return NextResponse.json({ error: 'Không tìm thấy văn bản' }, { status: 404 });
+      }
+
+      const target = currentDrafts[draftIndex];
+      const m = body.metadata || {};
+      const newTitle = m.title || target.extractedTitle;
+      const newCode = m.document_code || target.extractedCode || '';
+      const newIssuer = m.issuing_authority || target.extractedIssuer || 'ATTECH';
+      const newDate = m.issue_date || target.extractedIssueDate || '';
+      const newScope = m.scope_domain || target.scopeDomain || 'QL_KY_THUAT';
+
+      const comp = matchAgainstOfficialDocuments(officialDocs, newTitle, newCode);
+      currentDrafts[draftIndex] = {
+        ...target,
+        extractedTitle: newTitle,
+        extractedCode: newCode,
+        extractedIssuer: newIssuer,
+        extractedIssueDate: newDate,
+        scopeDomain: newScope,
+        aiExtracted: true,
+        matchType: comp.matchType,
+        similarityScore: comp.similarityScore,
+        matchedOfficialDoc: comp.matchedOfficialDoc || target.matchedOfficialDoc,
+        comparisonSummary: comp.comparisonSummary,
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (supabase) {
+        const blob = new Blob([JSON.stringify(currentDrafts, null, 2)], {
+          type: 'application/json',
+        });
+        await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
+          contentType: 'application/json',
+          upsert: true,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        updatedDraft: currentDrafts[draftIndex],
+        emailDrafts: currentDrafts,
+      });
     }
 
     return NextResponse.json({ error: 'Hành động không hợp lệ.' }, { status: 400 });

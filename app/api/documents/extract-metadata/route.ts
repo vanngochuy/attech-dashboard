@@ -18,21 +18,39 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const driveFileId = (formData.get('drive_file_id') as string) || '';
+    const fileUrl = (formData.get('file_url') as string) || '';
     const mode = (formData.get('mode') as string) || 'document'; // 'document' | 'license'
 
-    if (!file) {
+    let buffer: Buffer;
+    let fileName = file ? file.name : 'document.pdf';
+    let mimeType = file?.type || 'application/pdf';
+
+    if (file) {
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    } else if (driveFileId || fileUrl) {
+      const downloadUrl = driveFileId
+        ? `https://drive.google.com/uc?export=download&id=${driveFileId}`
+        : fileUrl;
+      const res = await fetch(downloadUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (!res.ok) {
+        return NextResponse.json(
+          { error: 'Không thể tải file PDF từ Google Drive để phân tích' },
+          { status: 400 }
+        );
+      }
+      const ab = await res.arrayBuffer();
+      buffer = Buffer.from(ab);
+    } else {
       return NextResponse.json({ error: 'Không tìm thấy tập tin để phân tích' }, { status: 400 });
     }
-
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const mimeType = file.type || 'application/pdf';
 
     let base64Data: string;
     let targetMimeType: string = mimeType;
 
     // TỐI ƯU HÓA QUOTA: Nếu là file PDF, chỉ cắt và gửi 2 trang đầu tiên
-    if (mimeType === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+    if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
       try {
         const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
         const pageCount = srcDoc.getPageCount();

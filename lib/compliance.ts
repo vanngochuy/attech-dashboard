@@ -40,6 +40,7 @@ export interface EmailDraftItem {
     driveFileId?: string;
   };
   comparisonSummary?: string;
+  aiExtracted?: boolean; // Đã được AI quét 2 trang đầu hay chưa
   updatedAt?: string;
 }
 

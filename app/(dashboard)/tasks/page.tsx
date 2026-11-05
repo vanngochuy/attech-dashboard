@@ -21,6 +21,13 @@ import {
   Sparkles,
   Calendar,
   UploadCloud,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Building,
+  Play,
+  Pause,
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 import { useAuth } from '@/components/auth-context';
@@ -74,6 +81,18 @@ export default function EmailDocumentTasksPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [matchFilter, setMatchFilter] = useState<'ALL' | 'UPDATE_CANDIDATE' | 'NEW_DRAFT' | 'PROMOTED'>('ALL');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Phân trang (Pagination) để bảng hiển thị vừa vặn trong màn hình
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(15);
+
+  // Trạng thái AI quét 2 trang cho từng file
+  const [aiScanningId, setAiScanningId] = useState<string | null>(null);
+
+  // Trạng thái hàng đợi AI quét tuần tự an toàn (<15 RPM)
+  const [isQueueRunning, setIsQueueRunning] = useState(false);
+  const [queueProgress, setQueueProgress] = useState<{ current: number; total: number } | null>(null);
+  const queueStopRef = useRef(false);
 
   // Modal So sánh chi tiết Văn bản Email (Chưa chính thức) vs Văn bản chính thức ở tab Tài liệu
   const [compareItem, setCompareItem] = useState<EmailDraftItem | null>(null);
@@ -191,6 +210,100 @@ export default function EmailDocumentTasksPage() {
     } finally {
       setIsScanning(false);
     }
+  };
+
+  // Bóc tách AI 2 trang đầu cho 1 văn bản cụ thể
+  const handleScanSingleAi = async (item: EmailDraftItem) => {
+    setAiScanningId(item.id);
+    try {
+      const fd = new FormData();
+      if (item.driveFileId) {
+        fd.append('drive_file_id', item.driveFileId);
+      } else if (item.fileUrl) {
+        fd.append('file_url', item.fileUrl);
+      } else {
+        throw new Error('Văn bản không có file đính kèm để AI đọc');
+      }
+      fd.append('mode', 'document');
+
+      const res = await fetch('/api/documents/extract-metadata', {
+        method: 'POST',
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI trích xuất thất bại');
+
+      // Cập nhật lại vào Supabase Storage
+      const metaRes = await fetch('/api/tasks/email-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'AI_EXTRACT_SINGLE',
+          draftId: item.id,
+          metadata: data.metadata,
+        }),
+      });
+      const metaData = await metaRes.json();
+      if (Array.isArray(metaData.emailDrafts)) {
+        setDrafts(metaData.emailDrafts);
+      }
+
+      showToast(
+        'success',
+        `AI đã đọc 2 trang đầu: ${data.metadata?.document_code || 'Chưa rõ số'} - ${data.metadata?.issuing_authority || ''}`
+      );
+    } catch (err: any) {
+      showToast('error', err.message || 'Lỗi quét AI');
+    } finally {
+      setAiScanningId(null);
+    }
+  };
+
+  // Quét hàng đợi AI an toàn cho toàn bộ file chưa quét (Tốc độ 1 file / 5s để tránh vượt 15 RPM của Gemini Free)
+  const handleToggleAiQueue = async () => {
+    if (isQueueRunning) {
+      queueStopRef.current = true;
+      setIsQueueRunning(false);
+      showToast('success', 'Đã tạm dừng hàng đợi quét AI.');
+      return;
+    }
+
+    const unScanned = drafts.filter((d) => !d.aiExtracted);
+    if (unScanned.length === 0) {
+      showToast('success', 'Tất cả các văn bản đã được AI quét hoàn tất!');
+      return;
+    }
+
+    setIsQueueRunning(true);
+    queueStopRef.current = false;
+    setQueueProgress({ current: 0, total: unScanned.length });
+
+    showToast(
+      'success',
+      `Bắt đầu hàng đợi AI an toàn (${unScanned.length} văn bản, tốc độ 12 file/phút để tuân thủ Gemini Free Tier)...`
+    );
+
+    let count = 0;
+    for (const item of unScanned) {
+      if (queueStopRef.current) break;
+      count++;
+      setQueueProgress({ current: count, total: unScanned.length });
+
+      try {
+        await handleScanSingleAi(item);
+      } catch {
+        // Continue next
+      }
+
+      // Nghỉ 4.5 giây giữa mỗi lượt để đảm bảo luôn < 15 RPM của Gemini Free
+      if (count < unScanned.length && !queueStopRef.current) {
+        await new Promise((resolve) => setTimeout(resolve, 4500));
+      }
+    }
+
+    setIsQueueRunning(false);
+    setQueueProgress(null);
+    showToast('success', `Đã hoàn tất hàng đợi AI cho ${count} văn bản!`);
   };
 
   // Xử lý khi chọn file PDF từ Email trong Modal: Upload vào thư mục Văn bản chưa chính thức + AI Gemini đọc Tên/Số hiệu
@@ -384,6 +497,17 @@ export default function EmailDocumentTasksPage() {
     });
   }, [drafts, searchQuery, matchFilter, fromDate, toDate, isAllTime]);
 
+  // Tự động reset về trang 1 khi thay đổi bộ lọc tìm kiếm hoặc kích thước trang
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, matchFilter, fromDate, toDate, isAllTime, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredDrafts.length / pageSize));
+  const paginatedDrafts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredDrafts.slice(start, start + pageSize);
+  }, [filteredDrafts, currentPage, pageSize]);
+
   const setQuickRangeDays = (days: number) => {
     const end = new Date();
     const start = new Date();
@@ -506,6 +630,35 @@ export default function EmailDocumentTasksPage() {
                 <span className="px-1.5 py-0.2 rounded text-[9px] bg-black/20 font-bold uppercase tracking-wider text-amber-100">
                   Admin
                 </span>
+              </button>
+            )}
+
+            {/* Nút Bật Hàng đợi AI quét 2 trang đầu an toàn (Free Tier Safe: 12 file/phút < 15 RPM) */}
+            {isAdmin && (
+              <button
+                onClick={handleToggleAiQueue}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-md cursor-pointer border ${
+                  isQueueRunning
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-400 animate-pulse'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-400/40'
+                }`}
+                title={
+                  isQueueRunning
+                    ? 'Bấm để tạm dừng hàng đợi AI'
+                    : 'Tự động quét lần lượt 2 trang đầu bằng AI cho các file chưa quét (Tốc độ an toàn 12 file/phút để không bị khóa API Free)'
+                }
+              >
+                {isQueueRunning ? (
+                  <>
+                    <Pause className="w-3.5 h-3.5" />
+                    <span>Dừng AI ({queueProgress?.current}/{queueProgress?.total})</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                    <span>AI Quét hàng đợi</span>
+                  </>
+                )}
               </button>
             )}
 
@@ -725,30 +878,31 @@ export default function EmailDocumentTasksPage() {
             {/* Table Header - FREEZE (Sticky top-0 z-20) */}
             <div className="sticky top-0 z-20 h-11 px-4 flex items-center justify-between bg-slate-100/95 backdrop-blur-md text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 rounded-t-xl shadow-2xs">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <span className="w-7 text-center">STT</span>
-                <span className="flex-1">VĂN BẢN PDF LỌC TỪ EMAIL (CHƯA CHÍNH THỨC)</span>
+                <span className="w-8 text-center">STT</span>
+                <span className="flex-1">VĂN BẢN (TRÍCH YẾU)</span>
               </div>
-              <div className="flex items-center gap-4 shrink-0 text-right">
-                <span className="w-28 text-left hidden md:inline">SỐ DỰ THẢO</span>
-                <span className="w-32 text-center hidden lg:inline">NGÀY EMAIL</span>
-                <span className="w-64 text-left hidden xl:inline">SO SÁNH VỚI TAB TÀI LIỆU</span>
-                <span className="w-40 text-center">KẾT QUẢ ĐỐI CHIẾU</span>
-                <span className="w-28 text-right">THAO TÁC</span>
+              <div className="flex items-center gap-3 shrink-0 text-right">
+                <span className="w-32 text-left hidden sm:inline">SỐ KÝ HIỆU</span>
+                <span className="w-40 text-left hidden md:inline">CƠ QUAN BAN HÀNH</span>
+                <span className="w-24 text-center hidden lg:inline">BAN HÀNH</span>
+                <span className="w-28 text-center hidden xl:inline">NGÀY EMAIL</span>
+                <span className="w-36 text-center">ĐỐI CHIẾU</span>
+                <span className="w-32 text-right">THAO TÁC</span>
               </div>
             </div>
 
-            {/* Table Rows */}
+            {/* Table Rows (Duyệt qua paginatedDrafts theo trang) */}
             <div className="divide-y divide-slate-100">
-              {filteredDrafts.map((item, idx) => (
+              {paginatedDrafts.map((item, idx) => (
                 <div
                   key={item.id}
                   onClick={() => setCompareItem(item)}
-                  className="py-3 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group cursor-pointer last:rounded-b-xl bg-white"
+                  className="py-2.5 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group cursor-pointer bg-white"
                 >
                   {/* Trái: STT + Tên văn bản PDF trong Email + Thông tin người gửi */}
-                  <div className="flex items-start gap-3 min-w-0 pr-4 flex-1">
-                    <span className="w-7 text-center text-xs text-slate-400 font-mono mt-0.5">
-                      {idx + 1}
+                  <div className="flex items-start gap-2.5 min-w-0 pr-3 flex-1">
+                    <span className="w-8 text-center text-xs text-slate-400 font-mono mt-0.5">
+                      {(currentPage - 1) * pageSize + idx + 1}
                     </span>
                     <FileText
                       className={`w-4 h-4 shrink-0 mt-0.5 ${
@@ -758,61 +912,78 @@ export default function EmailDocumentTasksPage() {
                       }`}
                     />
                     <div className="min-w-0 flex-1">
-                      <p
-                        className="text-xs font-semibold text-slate-900 group-hover:text-indigo-600 truncate"
-                        title={item.extractedTitle}
-                      >
-                        {item.extractedTitle}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p
+                          className="text-xs font-semibold text-slate-900 group-hover:text-sky-700 truncate"
+                          title={item.extractedTitle}
+                        >
+                          {item.extractedTitle}
+                        </p>
+                        {item.aiExtracted && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                            <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> AI Đã đọc
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                        <span className="truncate max-w-[260px]" title={item.emailSubject}>
-                          📧 {item.senderEmail}
+                        <span className="font-mono text-slate-600 truncate max-w-[200px]" title={item.pdfFileName}>
+                          📄 {item.pdfFileName}
                         </span>
                         <span>•</span>
-                        <span className="font-mono text-amber-700 bg-amber-50/80 px-1.5 py-0.2 rounded border border-amber-200/70">
-                          📁 {item.driveFolderName}
+                        <span className="truncate max-w-[220px]" title={item.emailSubject}>
+                          📧 {item.senderEmail}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Phải: Số dự thảo, Ngày nhận, Văn bản khớp ở tab Tài liệu, Nhãn đối chiếu, Thao tác gọn */}
-                  <div className="flex items-center gap-4 shrink-0">
-                    <span className="w-28 text-left font-mono text-xs text-indigo-700 font-semibold truncate hidden md:inline">
-                      {item.extractedCode || '---'}
+                  {/* Phải: Số hiệu, Cơ quan, Ngày ban hành, Ngày email, Nhãn đối chiếu, Thao tác */}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="w-32 text-left font-mono text-xs text-indigo-700 font-bold truncate hidden sm:inline" title={item.extractedCode}>
+                      {item.extractedCode || <span className="text-slate-300 font-normal italic">Chưa có</span>}
                     </span>
 
-                    <span className="w-32 text-center font-mono text-xs text-slate-600 hidden lg:inline">
-                      {item.receivedDate.slice(0, 10)}
+                    <span className="w-40 text-left text-xs text-slate-700 font-medium truncate hidden md:inline" title={item.extractedIssuer}>
+                      {item.extractedIssuer || 'ATTECH'}
                     </span>
 
-                    <div className="w-64 text-left hidden xl:block min-w-0">
-                      {item.matchedOfficialDoc ? (
-                        <div className="truncate">
-                          <span className="text-[11px] font-bold text-amber-800 font-mono">
-                            🔄 Cập nhật cho: {item.matchedOfficialDoc.code || 'Văn bản hiện hành'}
-                          </span>
-                          <p
-                            className="text-[11px] text-slate-600 truncate"
-                            title={item.matchedOfficialDoc.title}
-                          >
-                            {item.matchedOfficialDoc.title}
-                          </p>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 italic">
-                          Chưa có văn bản trùng trong Tài liệu
-                        </span>
-                      )}
-                    </div>
+                    <span className="w-24 text-center font-mono text-xs text-slate-600 hidden lg:inline">
+                      {item.extractedIssueDate ? formatToDMY(item.extractedIssueDate) : '---'}
+                    </span>
 
-                    <div className="w-40 text-center">{renderMatchBadge(item)}</div>
+                    <span className="w-28 text-center font-mono text-xs text-slate-500 hidden xl:inline" title={`Email nhận: ${item.receivedDate}`}>
+                      {item.receivedDate.slice(0, 16)}
+                    </span>
 
-                    {/* Cột Thao tác: Chỉ dùng icon gọn w-3.5 h-3.5 đồng bộ với các tab */}
+                    <div className="w-36 text-center">{renderMatchBadge(item)}</div>
+
+                    {/* Cột Thao tác */}
                     <div
-                      className="w-28 text-right flex items-center justify-end gap-1"
+                      className="w-32 text-right flex items-center justify-end gap-1"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {/* Nút AI Quét 2 trang đầu */}
+                      <button
+                        onClick={() => handleScanSingleAi(item)}
+                        disabled={aiScanningId === item.id}
+                        className={`p-1.5 rounded transition-colors cursor-pointer ${
+                          item.aiExtracted
+                            ? 'hover:bg-emerald-50 text-emerald-600'
+                            : 'hover:bg-amber-50 text-amber-600'
+                        }`}
+                        title={
+                          item.aiExtracted
+                            ? 'AI đã đọc 2 trang đầu (Bấm để quét lại)'
+                            : 'Bấm để AI Gemini đọc 2 trang đầu trích xuất Số hiệu & Cơ quan ban hành'
+                        }
+                      >
+                        {aiScanningId === item.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" />
+                        ) : (
+                          <Sparkles className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+
                       <button
                         onClick={() => setCompareItem(item)}
                         className="p-1.5 rounded hover:bg-amber-50 text-amber-700 transition-colors cursor-pointer"
@@ -854,6 +1025,86 @@ export default function EmailDocumentTasksPage() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Thanh Phân Trang (Pagination Footer) */}
+            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 rounded-b-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-slate-600">
+                <span>
+                  Hiển thị <span className="font-semibold text-slate-900 font-mono">{(currentPage - 1) * pageSize + 1}</span> - <span className="font-semibold text-slate-900 font-mono">{Math.min(currentPage * pageSize, filteredDrafts.length)}</span> trên tổng số <span className="font-semibold text-slate-900 font-mono">{filteredDrafts.length}</span> văn bản
+                </span>
+                <span className="text-slate-300">|</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500">Mỗi trang:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="bg-white border border-slate-200 rounded px-2 py-0.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-sky-500"
+                  >
+                    <option value={15}>15 dòng</option>
+                    <option value={20}>20 dòng</option>
+                    <option value={50}>50 dòng</option>
+                    <option value={100}>100 dòng</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Điều hướng trang */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="p-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  title="Trang đầu"
+                >
+                  <ChevronsLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  title="Trang trước"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+
+                <div className="flex items-center gap-1 px-2 font-mono text-xs text-slate-700">
+                  <span>Trang</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={currentPage}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (val >= 1 && val <= totalPages) setCurrentPage(val);
+                    }}
+                    className="w-11 text-center bg-white border border-slate-200 rounded py-0.5 text-xs font-bold text-sky-700 focus:outline-none focus:border-sky-500"
+                  />
+                  <span>/ {totalPages}</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  title="Trang sau"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="p-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  title="Trang cuối"
+                >
+                  <ChevronsRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         )}
