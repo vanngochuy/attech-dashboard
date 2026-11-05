@@ -19,9 +19,16 @@ export function isSupabaseConfigured(): boolean {
 }
 
 export function isSupabaseAdminConfigured(): boolean {
-  const url = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
+  const url = cleanEnv(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_SUPABASE_URL ||
+      process.env.SUPABASE_URL
+  );
   const key = cleanEnv(
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.NEXT_SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_ANON_KEY
   );
   if (!url || !key) return false;
   if (
@@ -54,9 +61,16 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
   if (!isSupabaseAdminConfigured()) {
     return null;
   }
-  const url = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
+  const url = cleanEnv(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_SUPABASE_URL ||
+      process.env.SUPABASE_URL
+  );
   const key = cleanEnv(
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.NEXT_SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_ANON_KEY
   );
   return createClient(url, key);
 }
