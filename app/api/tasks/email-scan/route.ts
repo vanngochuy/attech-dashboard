@@ -53,32 +53,19 @@ function computeSimilarity(titleA: string, titleB: string): number {
 }
 
 /**
- * So sánh một văn bản PDF từ Email (chưa chính thức) với toàn bộ văn bản chính thức trong bảng `document_files`
+ * So sánh một văn bản PDF từ Email (chưa chính thức) với toàn bộ văn bản chính thức trong mảng `officialDocs`
  */
-async function matchAgainstOfficialDocuments(
-  supabase: any,
+function matchAgainstOfficialDocuments(
+  officialDocs: any[],
   draftTitle: string,
   draftCode?: string
-): Promise<{
+): {
   matchType: EmailDraftMatchType;
   similarityScore: number;
   matchedOfficialDoc?: EmailDraftItem['matchedOfficialDoc'];
   comparisonSummary: string;
-}> {
+} {
   try {
-    if (!supabase) {
-      return {
-        matchType: 'NEW_DRAFT',
-        similarityScore: 0,
-        comparisonSummary: 'Chưa kết nối Supabase để đối chiếu kho văn bản chính thức.',
-      };
-    }
-
-    const { data: officialDocs } = await supabase
-      .from('document_files')
-      .select('id, file_name, document_code, issuing_authority, issue_date, status, google_drive_file_id')
-      .order('created_at', { ascending: false });
-
     if (!officialDocs || officialDocs.length === 0) {
       return {
         matchType: 'NEW_DRAFT',
@@ -104,7 +91,7 @@ async function matchAgainstOfficialDocuments(
             code: exactCodeDoc.document_code || '---',
             issuer: exactCodeDoc.issuing_authority || 'ATTECH',
             issueDate: exactCodeDoc.issue_date || '---',
-            driveFileId: exactCodeDoc.google_drive_file_id || undefined,
+            driveFileId: exactCodeDoc.drive_file_id || undefined,
           },
           comparisonSummary: `Trùng khớp Số / Ký hiệu "${exactCodeDoc.document_code}" với văn bản đã có trong tab Tài liệu chính thức.`,
         };
@@ -136,7 +123,7 @@ async function matchAgainstOfficialDocuments(
           code: bestDoc.document_code || '---',
           issuer: bestDoc.issuing_authority || 'ATTECH',
           issueDate: bestDoc.issue_date || '---',
-          driveFileId: bestDoc.google_drive_file_id || undefined,
+          driveFileId: bestDoc.drive_file_id || undefined,
         },
         comparisonSummary: `Khớp ${scorePercent}% nội dung với văn bản chính thức "${bestDoc.file_name}" (Số hiệu: ${bestDoc.document_code || '---'}, ngày ${bestDoc.issue_date || '---'}). Đây là văn bản cập nhật / sửa đổi cần thẩm định.`,
       };
@@ -146,7 +133,7 @@ async function matchAgainstOfficialDocuments(
       matchType: 'NEW_DRAFT',
       similarityScore: scorePercent,
       comparisonSummary:
-        'Chưa có văn bản tương ứng trong tab Tài liệu chính thức. Đã lưu vào thư mục Drive "Văn bản chưa chính thức" để theo dõi.',
+        'Chưa có văn bản tương ứng trong tab Tài liệu chính thức. Đã lưu vào thư mục Drive "03_TÀI LIỆU CHƯA XÁC THỰC" để theo dõi.',
     };
   } catch (err) {
     console.warn('Lỗi đối chiếu với kho Tài liệu:', err);
@@ -166,6 +153,8 @@ export async function POST(req: Request) {
 
     // Đọc danh sách hiện tại từ Supabase Storage
     let currentDrafts: EmailDraftItem[] = DEFAULT_EMAIL_DRAFTS;
+    let officialDocs: any[] = [];
+
     if (supabase) {
       try {
         const { data } = await supabase.storage.from(BUCKET_NAME).download(EMAIL_DRAFTS_PATH);
@@ -176,12 +165,23 @@ export async function POST(req: Request) {
       } catch {
         // Ignore and use fallback
       }
+
+      try {
+        // Lấy 1 lần duy nhất danh sách văn bản chính thức từ `document_files` để đối chiếu siêu tốc trong bộ nhớ
+        const { data: docs } = await supabase
+          .from('document_files')
+          .select('id, file_name, document_code, issuing_authority, issue_date, status, drive_file_id')
+          .order('created_at', { ascending: false });
+        if (Array.isArray(docs)) officialDocs = docs;
+      } catch (err) {
+        console.warn('Lỗi lấy officialDocs:', err);
+      }
     }
 
     // 1. Hành động: Thêm 1 file PDF từ Email và tự động đối chiếu với kho Tài liệu chính thức
     if (action === 'ADD_AND_COMPARE' && draftItem) {
-      const comparison = await matchAgainstOfficialDocuments(
-        supabase,
+      const comparison = matchAgainstOfficialDocuments(
+        officialDocs,
         draftItem.extractedTitle || draftItem.pdfFileName,
         draftItem.extractedCode
       );
@@ -222,9 +222,10 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. Hành động: Quét Email theo khoảng thời gian (Từ ngày - Đến ngày) và đối chiếu lại toàn bộ với bảng `document_files` thật trên Supabase
-    if (action === 'SCAN_DATE_RANGE') {
-      // Gọi luồng n8n `ATTECH - API: Email PDF Scanner to 03_TAI_LIEU_CHUA_XAC_THUC` (ID: CNLUQWWnkPHYRTRB)
+    // 2. Hành động: Quét Email & Đồng bộ từ Google Drive "03_TÀI LIỆU CHƯA XÁC THỰC" (ID: 1aejD_BWF9ZtclJ2WCDRW34myR9iAWxmz)
+    //    và đối chiếu lại toàn bộ với bảng `document_files` thật trên Supabase
+    if (action === 'SCAN_DATE_RANGE' || action === 'SYNC_DRIVE_FOLDER') {
+      // Gọi luồng n8n `ATTECH - Email PDF Scanner (tuh@attech.com.vn) -> 03_TAI_LIEU_CHUA_XAC_THUC` (ID: CNLUQWWnkPHYRTRB)
       const n8nEmailWebhook =
         cleanEnv(process.env.N8N_EMAIL_SCAN_WEBHOOK_URL) ||
         'http://localhost:5678/webhook/scan-email-pdf';
@@ -235,21 +236,34 @@ export async function POST(req: Request) {
           const n8nRes = await fetch(n8nEmailWebhook, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fromDate, toDate, senderFilter, mailbox: 'tuh@attech.com.vn' }),
+            body: JSON.stringify({
+              action: 'SYNC_DRIVE_FOLDER',
+              fromDate,
+              toDate,
+              senderFilter,
+              mailbox: 'tuh@attech.com.vn',
+            }),
+            signal: AbortSignal.timeout(15000),
           });
           if (n8nRes.ok) {
             const n8nData = await n8nRes.json();
             if (Array.isArray(n8nData.items)) {
               for (const item of n8nData.items) {
-                const exists = currentDrafts.some((d) => d.pdfFileName === item.pdfFileName);
+                const exists = currentDrafts.some(
+                  (d) =>
+                    (item.driveFileId && d.driveFileId === item.driveFileId) ||
+                    d.pdfFileName === item.pdfFileName
+                );
                 if (!exists) {
                   currentDrafts.unshift({
                     id: `edraft-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                     emailSubject: item.emailSubject || item.pdfFileName,
-                    senderEmail: item.senderEmail || 'email@attech.com.vn',
-                    receivedDate: item.receivedDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
+                    senderEmail: item.senderEmail || 'tuh@attech.com.vn',
+                    receivedDate:
+                      item.receivedDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
                     pdfFileName: item.pdfFileName,
-                    extractedTitle: item.extractedTitle || item.pdfFileName,
+                    extractedTitle:
+                      item.extractedTitle || item.pdfFileName.replace(/\.pdf$/i, ''),
                     extractedCode: item.extractedCode || '',
                     extractedIssuer: item.extractedIssuer || 'ATTECH',
                     extractedIssueDate: item.extractedIssueDate || '',
@@ -265,7 +279,7 @@ export async function POST(req: Request) {
             }
           }
         } catch (err) {
-          console.warn('Webhook n8n Email Scan chưa phản hồi, dùng dữ liệu đối chiếu trực tiếp:', err);
+          console.warn('Webhook n8n Email Scan / Drive Sync chưa phản hồi, dùng dữ liệu đối chiếu trực tiếp:', err);
         }
       }
 
@@ -276,8 +290,8 @@ export async function POST(req: Request) {
           reEvaluatedDrafts.push(draft);
           continue;
         }
-        const comp = await matchAgainstOfficialDocuments(
-          supabase,
+        const comp = matchAgainstOfficialDocuments(
+          officialDocs,
           draft.extractedTitle || draft.pdfFileName,
           draft.extractedCode
         );
@@ -333,7 +347,7 @@ export async function POST(req: Request) {
           department_access: [target.scopeDomain || 'QL_KY_THUAT'],
           status: 'ACTIVE',
           sync_status: 'SYNCED',
-          google_drive_file_id: target.driveFileId || null,
+          drive_file_id: target.driveFileId || null,
           ocr_content: `[Ban hành từ Email ngày ${target.receivedDate}] ${target.extractedTitle}`,
         });
       }
@@ -383,7 +397,7 @@ export async function POST(req: Request) {
         if (exists) continue;
 
         const title = item.extractedTitle || item.pdfFileName;
-        const comp = await matchAgainstOfficialDocuments(supabase, title, item.extractedCode);
+        const comp = matchAgainstOfficialDocuments(officialDocs, title, item.extractedCode);
 
         updated.unshift({
           id: `edraft-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,

@@ -63,7 +63,8 @@ export default function EmailDocumentTasksPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Bộ lọc khoảng thời gian đọc Email
+  // Bộ lọc khoảng thời gian đọc Email - Mặc định mở Tất cả ngày để hiển thị toàn bộ tài liệu từ Google Drive / Email
+  const [isAllTime, setIsAllTime] = useState(true);
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 14);
@@ -152,6 +153,41 @@ export default function EmailDocumentTasksPage() {
       );
     } catch (err: any) {
       showToast('error', err.message || 'Không thể quét email');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // Nút Quét Email & Đồng bộ Drive thủ công dành riêng cho Admin
+  const handleAdminManualScan = async () => {
+    setIsScanning(true);
+    try {
+      const res = await fetch('/api/tasks/email-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'SYNC_DRIVE_FOLDER',
+          mailbox: 'tuh@attech.com.vn',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Quét và đồng bộ thất bại');
+
+      if (Array.isArray(data.emailDrafts)) {
+        setDrafts(data.emailDrafts);
+      }
+      setIsAllTime(true);
+
+      const updateCount = (data.emailDrafts || []).filter(
+        (d: EmailDraftItem) => d.matchType === 'UPDATE_CANDIDATE'
+      ).length;
+
+      showToast(
+        'success',
+        `Đã hoàn tất quét thủ công! Đồng bộ ${data.emailDrafts?.length || 0} văn bản PDF từ Google Drive & Email (Phát hiện ${updateCount} bản cập nhật văn bản).`
+      );
+    } catch (err: any) {
+      showToast('error', err.message || 'Không thể đồng bộ dữ liệu');
     } finally {
       setIsScanning(false);
     }
@@ -329,10 +365,12 @@ export default function EmailDocumentTasksPage() {
       if (matchFilter === 'NEW_DRAFT' && item.matchType !== 'NEW_DRAFT') return false;
       if (matchFilter === 'PROMOTED' && item.matchType !== 'PROMOTED') return false;
 
-      // Lọc theo khoảng ngày nhận email (nếu ngày định dạng YYYY-MM-DD)
-      const itemDate = (item.receivedDate || '').slice(0, 10);
-      if (fromDate && itemDate >= '2020-01-01' && itemDate < fromDate) return false;
-      if (toDate && itemDate >= '2020-01-01' && itemDate > toDate) return false;
+      // Lọc theo khoảng ngày nhận email (khi người dùng chủ động chọn khoảng ngày, không bật isAllTime)
+      if (!isAllTime) {
+        const itemDate = (item.receivedDate || '').slice(0, 10);
+        if (fromDate && itemDate >= '2020-01-01' && itemDate < fromDate) return false;
+        if (toDate && itemDate >= '2020-01-01' && itemDate > toDate) return false;
+      }
 
       if (!q) return true;
       return (
@@ -344,7 +382,7 @@ export default function EmailDocumentTasksPage() {
         (item.matchedOfficialDoc?.code || '').toLowerCase().includes(q)
       );
     });
-  }, [drafts, searchQuery, matchFilter, fromDate, toDate]);
+  }, [drafts, searchQuery, matchFilter, fromDate, toDate, isAllTime]);
 
   const setQuickRangeDays = (days: number) => {
     const end = new Date();
@@ -444,15 +482,32 @@ export default function EmailDocumentTasksPage() {
               <span className="text-amber-700 font-bold font-mono">ATTECH_DOCUMENTS/03_TÀI LIỆU CHƯA XÁC THỰC</span>
             </div>
 
+            {/* Nút Quét Email & Đối chiếu thường */}
             <button
               onClick={handleScanEmailsByDateRange}
               disabled={isScanning}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-white text-slate-800 hover:text-sky-700 border border-white rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer disabled:opacity-60"
               title="Quét Email theo khoảng thời gian và đối chiếu với kho Tài liệu chính thức"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-amber-600 ${isScanning ? 'animate-spin' : ''}`} />
-              <span>{isScanning ? 'Đang quét Email...' : 'Quét Email & Đối chiếu'}</span>
+              <RefreshCw className={`w-3.5 h-3.5 text-sky-600 ${isScanning ? 'animate-spin' : ''}`} />
+              <span>{isScanning ? 'Đang quét...' : 'Quét Email & Đối chiếu'}</span>
             </button>
+
+            {/* Nút Quét Email & Đồng bộ Drive THỦ CÔNG DÀNH RIÊNG CHO ADMIN */}
+            {isAdmin && (
+              <button
+                onClick={handleAdminManualScan}
+                disabled={isScanning}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-95 text-white rounded-lg text-xs font-semibold transition-all shadow-md cursor-pointer disabled:opacity-60 border border-amber-400/40"
+                title="Admin: Quét trực tiếp hộp thư tuh@attech.com.vn và đồng bộ toàn bộ file PDF trong thư mục Google Drive 03_TÀI LIỆU CHƯA XÁC THỰC"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-white ${isScanning ? 'animate-spin' : ''}`} />
+                <span>{isScanning ? 'Đang quét & đồng bộ...' : 'Quét Email & Drive thủ công'}</span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] bg-black/20 font-bold uppercase tracking-wider text-amber-100">
+                  Admin
+                </span>
+              </button>
+            )}
 
             {isAdmin && (
               <button
@@ -512,7 +567,10 @@ export default function EmailDocumentTasksPage() {
               <input
                 type="date"
                 value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
+                onChange={(e) => {
+                  setFromDate(e.target.value);
+                  setIsAllTime(false);
+                }}
                 className="bg-transparent font-mono text-slate-800 focus:outline-none"
               />
               <span className="text-slate-400">→</span>
@@ -520,7 +578,10 @@ export default function EmailDocumentTasksPage() {
               <input
                 type="date"
                 value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
+                onChange={(e) => {
+                  setToDate(e.target.value);
+                  setIsAllTime(false);
+                }}
                 className="bg-transparent font-mono text-slate-800 focus:outline-none"
               />
             </div>
@@ -528,27 +589,42 @@ export default function EmailDocumentTasksPage() {
             <div className="flex items-center gap-1 text-[11px]">
               <button
                 type="button"
-                onClick={() => setQuickRangeDays(7)}
-                className="px-2 py-1 rounded-md bg-slate-100 hover:bg-sky-50 text-slate-600 hover:text-sky-700 font-medium cursor-pointer"
+                onClick={() => {
+                  setQuickRangeDays(7);
+                  setIsAllTime(false);
+                }}
+                className={`px-2 py-1 rounded-md font-medium cursor-pointer transition-colors ${
+                  !isAllTime
+                    ? 'bg-slate-100 hover:bg-sky-50 text-slate-600 hover:text-sky-700'
+                    : 'bg-slate-100 text-slate-500'
+                }`}
               >
                 7 ngày
               </button>
               <button
                 type="button"
-                onClick={() => setQuickRangeDays(30)}
-                className="px-2 py-1 rounded-md bg-slate-100 hover:bg-sky-50 text-slate-600 hover:text-sky-700 font-medium cursor-pointer"
+                onClick={() => {
+                  setQuickRangeDays(30);
+                  setIsAllTime(false);
+                }}
+                className={`px-2 py-1 rounded-md font-medium cursor-pointer transition-colors ${
+                  !isAllTime
+                    ? 'bg-slate-100 hover:bg-sky-50 text-slate-600 hover:text-sky-700'
+                    : 'bg-slate-100 text-slate-500'
+                }`}
               >
                 30 ngày
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setFromDate('2025-01-01');
-                  setToDate('2027-12-31');
-                }}
-                className="px-2 py-1 rounded-md bg-slate-100 hover:bg-sky-50 text-slate-600 hover:text-sky-700 font-medium cursor-pointer"
+                onClick={() => setIsAllTime(true)}
+                className={`px-2.5 py-1 rounded-md font-medium cursor-pointer transition-colors ${
+                  isAllTime
+                    ? 'bg-sky-600 text-white font-semibold shadow-xs'
+                    : 'bg-slate-100 hover:bg-sky-50 text-slate-600 hover:text-sky-700'
+                }`}
               >
-                Tất cả ngày
+                Tất cả ngày ({drafts.length})
               </button>
             </div>
           </div>
