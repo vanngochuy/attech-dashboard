@@ -601,22 +601,19 @@ export default function FloatingAssistant() {
                   {/* Danh sách tin nhắn */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {messages.length === 0 ? (
-                      <div className="flex flex-col items-center text-center pt-4">
-                        <div className="mb-2">
-                          <AnimatedChatbotIcon className="w-16 h-16" />
-                        </div>
-                        <h4 className="text-sm font-bold text-slate-900">
-                          {selectedDocs.length > 0
-                            ? `Sẵn sàng phân tích ${selectedDocs.length} văn bản đã chọn`
-                            : 'Trợ lý Tài liệu ATTECH'}
-                        </h4>
+                      <div className="flex flex-col items-center text-center pt-2">
                         {selectedDocs.length > 0 && (
-                          <p className="text-xs text-slate-600 mt-1 max-w-md leading-relaxed">
-                            AI sẽ đọc trực tiếp toàn bộ nội dung chữ (OCR) đã lưu trên Supabase của văn bản được chọn và trích dẫn chính xác từng trang.
-                          </p>
+                          <div className="mb-2">
+                            <h4 className="text-sm font-bold text-slate-900">
+                              Sẵn sàng phân tích {selectedDocs.length} văn bản đã chọn
+                            </h4>
+                            <p className="text-xs text-slate-600 mt-1 max-w-md leading-relaxed">
+                              AI sẽ đọc trực tiếp toàn bộ nội dung chữ (OCR) đã lưu trên Supabase của văn bản được chọn và trích dẫn chính xác từng trang.
+                            </p>
+                          </div>
                         )}
 
-                        <div className="mt-4 flex flex-col gap-2 w-full max-w-md">
+                        <div className="flex flex-col gap-2 w-full max-w-md">
                           {suggestions.map((s) => (
                             <button
                               key={s}

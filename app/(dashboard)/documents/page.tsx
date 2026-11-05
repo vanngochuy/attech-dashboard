@@ -47,6 +47,7 @@ import { abbreviateIssuer } from '@/lib/issuer';
 import { useAssistant } from '@/components/assistant-context';
 import { useAuth } from '@/components/auth-context';
 import { useTheme } from '@/components/theme-context';
+import ThemeToggleButton from '@/components/theme-toggle-button';
 
 // Danh mục Chuyên môn
 const DEPARTMENTS = [
@@ -383,6 +384,9 @@ function DocumentsContent() {
 
           {/* Right Action Tools */}
           <div className="flex items-center gap-2.5 ml-auto">
+            {/* Nút chuyển đổi Theme (Sky Cloud <-> Deep Aero) nằm bên trái Drive: Synced */}
+            <ThemeToggleButton />
+
             {/* Trạng thái Google Drive dạng mờ Glassmorphism (bỏ Supabase Ready) */}
             <div className="hidden lg:flex items-center mr-1">
               <div

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/components/auth-context';
 import { useTheme } from '@/components/theme-context';
+import ThemeToggleButton from '@/components/theme-toggle-button';
 import {
   StaffTrainingRecord,
   CertificateRow,
@@ -390,6 +391,9 @@ export default function TrainingRecordsPage() {
           </div>
 
           <div className="flex items-center gap-2.5 ml-auto">
+            {/* Nút chuyển đổi Theme (Sky Cloud <-> Deep Aero) nằm bên trái Drive */}
+            <ThemeToggleButton />
+
             <div
               className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs shadow-xs border ${
                 isDeepAero

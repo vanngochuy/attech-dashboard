@@ -32,6 +32,7 @@ import {
 import { PDFDocument } from 'pdf-lib';
 import { useAuth } from '@/components/auth-context';
 import { useTheme } from '@/components/theme-context';
+import ThemeToggleButton from '@/components/theme-toggle-button';
 import {
   EmailDraftItem,
   DEFAULT_EMAIL_DRAFTS,
@@ -681,6 +682,9 @@ export default function EmailDocumentTasksPage() {
           </div>
 
           <div className="flex items-center gap-2.5 ml-auto">
+            {/* Nút chuyển đổi Theme (Sky Cloud <-> Deep Aero) */}
+            <ThemeToggleButton />
+
             <div className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs shadow-xs border ${
               isDeepAero
                 ? 'glass-pill-deep-aero'

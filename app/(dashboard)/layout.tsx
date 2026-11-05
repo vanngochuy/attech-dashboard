@@ -7,7 +7,6 @@ import { AssistantProvider } from '@/components/assistant-context';
 import FloatingAssistant from '@/components/floating-assistant';
 import { AuthProvider, SidebarUserStatus } from '@/components/auth-context';
 import { ThemeProvider, useTheme } from '@/components/theme-context';
-import ThemeToggleButton from '@/components/theme-toggle-button';
 
 function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const { isDeepAero } = useTheme();
@@ -63,7 +62,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Cụm Logo ATTECH (Bỏ hoàn toàn khung viền, chỉ giữ logo và chữ nổi bật trên nền mây) */}
-        <div className={`h-14 flex items-center justify-between px-5 border-b relative z-10 ${isDeepAero ? 'border-white/10' : 'border-white/20'}`}>
+        <div className={`h-14 flex items-center px-5 border-b relative z-10 ${isDeepAero ? 'border-white/10' : 'border-white/20'}`}>
           <div className="flex items-center gap-2.5 select-none">
             <img
               src="/attech-logo.png"
@@ -75,9 +74,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
               <span className="text-white">TTECH</span>
             </span>
           </div>
-
-          {/* Nút chuyển đổi giao diện Theme (Sky Cloud <-> Deep Aero) */}
-          <ThemeToggleButton />
         </div>
 
         <nav className="flex-1 overflow-y-auto py-5 px-3 space-y-6 no-scrollbar relative z-10">
