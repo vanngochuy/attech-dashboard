@@ -387,32 +387,6 @@ function DocumentsContent() {
               </div>
             </div>
 
-            {/* Search bar */}
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sky-600 w-3.5 h-3.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Từ khóa: tên + năm, số hiệu, đơn vị..."
-                className="bg-white/95 focus:bg-white border border-white focus:border-sky-200 focus:ring-2 focus:ring-white/50 rounded-lg pl-8 pr-14 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all w-60 sm:w-72 focus:w-80 shadow-sm"
-              />
-              {searchQuery ? (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 p-0.5 rounded"
-                  title="Xóa từ khóa tìm kiếm"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              ) : (
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
-                  ⌘K
-                </span>
-              )}
-            </div>
-
             {/* Admin Quét Drive Nhanh (Chỉ hiển thị cho Admin) */}
             {isAdmin && (
               <button
@@ -596,22 +570,23 @@ function DocumentsContent() {
           </div>
 
           {/* Phải: Các trường lọc nâng cao (Từ khóa + Chuyên môn + Đơn vị ban hành + Năm ban hành + Hiệu lực) */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 flex-1 justify-end">
             {/* Ô tìm kiếm từ khóa trực tiếp (Hỗ trợ gõ tên + năm + đơn vị không cần đúng thứ tự) */}
-            <div className="relative min-w-[220px] sm:min-w-[260px]">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
+            <div className="relative flex-1 min-w-[240px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-600 w-3.5 h-3.5" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Gõ vài từ khóa (VD: an toàn 2025, alos attech)..."
-                className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-sky-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all"
+                placeholder="Tìm từ khóa: tên văn bản + năm, số hiệu, đơn vị (VD: an toàn 2025)..."
+                className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
+                  title="Xóa từ khóa"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
