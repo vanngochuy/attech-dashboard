@@ -825,7 +825,7 @@ function DocumentsContent() {
                       <span className="w-28 text-center">NGÀY BAN HÀNH</span>
                       <span className="w-32 text-center hidden lg:inline">CHUYÊN MÔN</span>
                       <span className="w-28 text-center">HIỆU LỰC</span>
-                      <span className="w-24 text-right">THAO TÁC</span>
+                      <span className="w-10 text-center"></span>
                     </div>
                   </div>
 
@@ -841,28 +841,31 @@ function DocumentsContent() {
                       return (
                         <div
                           key={doc.id}
-                          className={`h-14 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group cursor-pointer last:rounded-b-xl ${isMissingOnDrive
+                          className={`h-14 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group last:rounded-b-xl ${isMissingOnDrive
                               ? 'bg-rose-50/30'
                               : isSuperseded
                                 ? 'bg-amber-50/20'
                                 : 'bg-white'
                             }`}
-                          onClick={() => {
-                            if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
-                            else if (isAdmin) setEditingDoc(doc);
-                          }}
                         >
-                          {/* Left: Icon + File Name */}
-                          <div className="flex items-center gap-3 min-w-0 pr-4 flex-1">
+                          {/* Left: Icon + File Name -> Nhấn vào TÊN VĂN BẢN để mở xem trước */}
+                          <div
+                            className={`flex items-center gap-3 min-w-0 pr-4 flex-1 ${
+                              !isMissingOnDrive ? 'cursor-pointer group/title' : 'cursor-not-allowed'
+                            }`}
+                            onClick={() => {
+                              if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
+                            }}
+                            title={!isMissingOnDrive ? `Nhấn để xem trước: ${doc.file_name}` : 'File bị mất trên Google Drive'}
+                          >
                             <div className="shrink-0">{getFileIcon(doc.file_name)}</div>
                             <span
                               className={`text-xs font-semibold truncate ${isMissingOnDrive
                                   ? 'text-slate-400 line-through decoration-rose-500/50'
                                   : isSuperseded
-                                    ? 'text-slate-600'
-                                    : 'text-slate-900 group-hover:text-indigo-600'
-                                }`}
-                              title={doc.file_name}
+                                    ? 'text-slate-600 group-hover/title:text-indigo-600 group-hover/title:underline'
+                                    : 'text-slate-900 group-hover/title:text-indigo-600 group-hover/title:underline'
+                                } transition-colors`}
                             >
                               {doc.file_name}
                             </span>
@@ -870,31 +873,71 @@ function DocumentsContent() {
 
                           {/* Right Columns */}
                           <div className="flex items-center gap-4 shrink-0">
-                            {/* Số hiệu */}
-                            <span className="w-28 text-left font-mono text-xs text-indigo-700 font-semibold truncate hidden sm:inline">
+                            {/* Số hiệu -> Không mở xem trước; Admin click vào để sửa */}
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isAdmin) setEditingDoc(doc);
+                              }}
+                              className={`w-28 text-left font-mono text-xs font-semibold truncate hidden sm:inline px-1 py-0.5 rounded ${
+                                isAdmin
+                                  ? 'cursor-pointer text-indigo-700 hover:bg-indigo-50 hover:underline'
+                                  : 'cursor-default text-indigo-700'
+                              }`}
+                              title={isAdmin ? 'Nhấn để chỉnh sửa Số/Ký hiệu (Admin)' : undefined}
+                            >
                               {doc.document_code || '---'}
                             </span>
 
-                            {/* Đơn vị */}
+                            {/* Đơn vị -> Không mở xem trước; Admin click vào để sửa */}
                             <span
-                              className="w-28 text-left text-xs text-slate-700 font-medium truncate hidden md:inline"
-                              title={doc.issuing_authority || undefined}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isAdmin) setEditingDoc(doc);
+                              }}
+                              className={`w-28 text-left text-xs font-medium truncate hidden md:inline px-1 py-0.5 rounded ${
+                                isAdmin
+                                  ? 'cursor-pointer text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:underline'
+                                  : 'cursor-default text-slate-700'
+                              }`}
+                              title={isAdmin ? `Nhấn để chỉnh sửa Đơn vị ban hành: ${doc.issuing_authority || 'Chưa có'} (Admin)` : doc.issuing_authority || undefined}
                             >
                               {abbreviateIssuer(doc.issuing_authority)}
                             </span>
 
-                            {/* Ngày ban hành */}
-                            <span className="w-28 text-center font-mono text-xs text-slate-600">
+                            {/* Ngày ban hành -> Không mở xem trước; Admin click vào để sửa */}
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isAdmin) setEditingDoc(doc);
+                              }}
+                              className={`w-28 text-center font-mono text-xs font-medium px-1 py-0.5 rounded ${
+                                isAdmin
+                                  ? 'cursor-pointer text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 hover:underline'
+                                  : 'cursor-default text-slate-600'
+                              }`}
+                              title={isAdmin ? 'Nhấn để chỉnh sửa Ngày ban hành (Admin)' : undefined}
+                            >
                               {doc.issue_date
                                 ? new Date(doc.issue_date).toLocaleDateString('vi-VN')
                                 : '---'}
                             </span>
 
-                            {/* Chuyên môn (Rút gọn: QLKT, CTHK, CHK...) */}
-                            <span className="w-32 text-center hidden lg:inline">
+                            {/* Chuyên môn (Rút gọn: QLKT, CTHK, CHK...) -> Không mở xem trước; Admin click vào để sửa */}
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isAdmin) setEditingDoc(doc);
+                              }}
+                              className={`w-32 text-center hidden lg:inline ${
+                                isAdmin ? 'cursor-pointer' : 'cursor-default'
+                              }`}
+                              title={isAdmin ? `Nhấn để chỉnh sửa Chuyên môn: ${dept.label} (Admin)` : `Chuyên môn: ${dept.label}`}
+                            >
                               <span
-                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200"
-                                title={`Chuyên môn: ${dept.label}`}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 transition-colors ${
+                                  isAdmin ? 'hover:border-indigo-300 hover:bg-indigo-50' : ''
+                                }`}
                               >
                                 <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
                                 <span className="truncate max-w-[100px]">{dept.shortLabel || dept.label}</span>
@@ -918,52 +961,23 @@ function DocumentsContent() {
                               )}
                             </span>
 
-                            {/* Thao tác */}
+                            {/* Cột Chatbot AI duy nhất ở cuối (Đã bỏ con mắt, bỏ sửa, bỏ drive, bỏ chữ THAO TÁC) */}
                             <div
-                              className="w-24 text-right flex items-center justify-end gap-1"
+                              className="w-10 flex items-center justify-center shrink-0"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <button
                                 data-assistant-trigger="true"
                                 onClick={() => selectAndAskDoc(doc.id)}
-                                className={`p-1.5 rounded transition-colors ${
+                                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                                   selectedDocIds.includes(doc.id)
                                     ? 'bg-indigo-600 text-white shadow-2xs'
                                     : 'hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700'
                                 }`}
                                 title="Ghim văn bản này vào Trợ lý AI để hỏi sâu nội dung"
                               >
-                                <Bot className="w-3.5 h-3.5" />
+                                <Bot className="w-4 h-4" />
                               </button>
-                              {!isMissingOnDrive && (
-                                <button
-                                  onClick={() => setPreviewDoc(doc.drive_file_id)}
-                                  className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors"
-                                  title="Xem trước"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                              {isAdmin && (
-                                <button
-                                  onClick={() => setEditingDoc(doc)}
-                                  className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
-                                  title="Sửa metadata (Admin)"
-                                >
-                                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                              {!isMissingOnDrive && doc.drive_view_url && (
-                                <a
-                                  href={doc.drive_view_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
-                                  title="Mở Google Drive"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -990,15 +1004,20 @@ function DocumentsContent() {
                           : isSuperseded
                             ? 'border-amber-300 hover:border-amber-400 opacity-95 hover:opacity-100'
                             : 'border-slate-200 hover:border-indigo-400 hover:shadow-md'
-                        } rounded-xl overflow-hidden transition-all group cursor-pointer flex flex-col justify-between shadow-xs`}
-                      onClick={() => {
-                        if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
-                        else if (isAdmin) setEditingDoc(doc);
-                      }}
+                        } rounded-xl overflow-hidden transition-all group flex flex-col justify-between shadow-xs`}
                     >
                       {/* 1. Header Khung: Icon + Tên tài liệu + Hiệu lực + Actions */}
                       <div className="p-3.5 pb-2.5 flex items-start justify-between gap-2 border-b border-slate-100 bg-slate-50/70">
-                        <div className="flex items-center gap-2.5 min-w-0">
+                        {/* Nhấn vào TÊN VĂN BẢN để mở xem trước */}
+                        <div
+                          className={`flex items-center gap-2.5 min-w-0 flex-1 ${
+                            !isMissingOnDrive ? 'cursor-pointer group/title' : 'cursor-not-allowed'
+                          }`}
+                          onClick={() => {
+                            if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
+                          }}
+                          title={!isMissingOnDrive ? `Nhấn để xem trước: ${doc.file_name}` : 'File bị mất trên Google Drive'}
+                        >
                           <div className="p-2 rounded-lg bg-white border border-slate-200 shadow-xs shrink-0">
                             {getFileIcon(doc.file_name)}
                           </div>
@@ -1007,8 +1026,8 @@ function DocumentsContent() {
                               className={`text-xs font-bold truncate ${isMissingOnDrive
                                   ? 'line-through text-slate-400'
                                   : isSuperseded
-                                    ? 'text-slate-600'
-                                    : 'text-slate-900 group-hover:text-indigo-600'
+                                    ? 'text-slate-600 group-hover/title:text-indigo-600 group-hover/title:underline'
+                                    : 'text-slate-900 group-hover/title:text-indigo-600 group-hover/title:underline'
                                 } transition-colors`}
                               title={doc.file_name}
                             >
@@ -1032,7 +1051,7 @@ function DocumentsContent() {
                           </div>
                         </div>
 
-                        {/* Quick actions */}
+                        {/* Quick action: Chỉ để icon Bot duy nhất */}
                         <div
                           className="flex items-center gap-0.5 shrink-0"
                           onClick={(e) => e.stopPropagation()}
@@ -1040,49 +1059,29 @@ function DocumentsContent() {
                           <button
                             data-assistant-trigger="true"
                             onClick={() => selectAndAskDoc(doc.id)}
-                            className={`p-1 rounded transition-colors ${
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                               selectedDocIds.includes(doc.id)
                                 ? 'bg-indigo-600 text-white shadow-2xs'
                                 : 'hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700'
                             }`}
                             title="Ghim văn bản này vào Trợ lý AI để hỏi sâu nội dung"
                           >
-                            <Bot className="w-3.5 h-3.5" />
+                            <Bot className="w-4 h-4" />
                           </button>
-                          {!isMissingOnDrive && (
-                            <button
-                              onClick={() => setPreviewDoc(doc.drive_file_id)}
-                              className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-indigo-600 transition-colors"
-                              title="Xem trước"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {isAdmin && (
-                            <button
-                              onClick={() => setEditingDoc(doc)}
-                              className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-colors"
-                              title="Chỉnh sửa metadata (Admin)"
-                            >
-                              <SlidersHorizontal className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {!isMissingOnDrive && doc.drive_view_url && (
-                            <a
-                              href={doc.drive_view_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-colors"
-                              title="Mở Google Drive"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                          )}
                         </div>
                       </div>
 
-                      {/* 2. Thân Khung: 4 trường thông tin chi tiết */}
-                      <div className="p-3.5 space-y-2 bg-white flex-1">
+                      {/* 2. Thân Khung: 4 trường thông tin chi tiết -> Admin nhấn vào để chỉnh sửa */}
+                      <div
+                        className={`p-3.5 space-y-2 bg-white flex-1 ${
+                          isAdmin ? 'cursor-pointer hover:bg-sky-50/40 transition-colors' : 'cursor-default'
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isAdmin) setEditingDoc(doc);
+                        }}
+                        title={isAdmin ? 'Nhấn để chỉnh sửa thông tin văn bản (Admin)' : undefined}
+                      >
                         {/* Số hiệu văn bản */}
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-500 flex items-center gap-1.5 font-medium">
