@@ -8,17 +8,16 @@ import {
   Eye,
   Pencil,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
   AlertTriangle,
   CheckCircle2,
-  Clock,
   Upload,
   FileText,
   ExternalLink,
   X,
   Loader2,
   Paperclip,
+  RefreshCw,
+  Database,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -27,7 +26,6 @@ import {
   evaluateExpiry,
   formatToDMY,
   formatToYMD,
-  ExpiryState,
 } from '@/lib/compliance';
 
 export default function OperatingLicensesPage() {
@@ -36,7 +34,7 @@ export default function OperatingLicensesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [radarFilter, setRadarFilter] = useState<'ALL' | 'VALID' | 'EXPIRING_SOON' | 'EXPIRED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'VALID' | 'EXPIRING_SOON' | 'EXPIRED'>('ALL');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Modal Thêm / Sửa giấy phép
@@ -100,34 +98,13 @@ export default function OperatingLicensesPage() {
     }
   };
 
-  // Thống kê Radar Cảnh báo Hạn
-  const radarStats = useMemo(() => {
-    let valid = 0;
-    let expiringSoon = 0;
-    let expired = 0;
-
-    licenses.forEach((lic) => {
-      const ev = evaluateExpiry(lic.expiryDate);
-      if (ev.state === 'EXPIRED') expired++;
-      else if (ev.state === 'EXPIRING_SOON') expiringSoon++;
-      else valid++;
-    });
-
-    return {
-      total: licenses.length,
-      valid,
-      expiringSoon,
-      expired,
-    };
-  }, [licenses]);
-
   const filteredLicenses = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return licenses.filter((item) => {
       const ev = evaluateExpiry(item.expiryDate);
-      if (radarFilter === 'VALID' && ev.state !== 'ACTIVE' && ev.state !== 'PERMANENT') return false;
-      if (radarFilter === 'EXPIRING_SOON' && ev.state !== 'EXPIRING_SOON') return false;
-      if (radarFilter === 'EXPIRED' && ev.state !== 'EXPIRED') return false;
+      if (statusFilter === 'VALID' && ev.state !== 'ACTIVE' && ev.state !== 'PERMANENT') return false;
+      if (statusFilter === 'EXPIRING_SOON' && ev.state !== 'EXPIRING_SOON') return false;
+      if (statusFilter === 'EXPIRED' && ev.state !== 'EXPIRED') return false;
 
       if (!q) return true;
       return (
@@ -136,7 +113,7 @@ export default function OperatingLicensesPage() {
         item.expiryDate.toLowerCase().includes(q)
       );
     });
-  }, [licenses, searchQuery, radarFilter]);
+  }, [licenses, searchQuery, statusFilter]);
 
   const openAddModal = () => {
     setEditingItem(null);
@@ -218,7 +195,7 @@ export default function OperatingLicensesPage() {
           : lic
       );
 
-      await persistLicenses(updated, `Đã đính kèm file "${file.name}" vào giấy phép!`);
+      await persistLicenses(updated, `Đã đính kèm file "${file.name}"!`);
     } catch (err: any) {
       showToast('error', err.message || 'Không thể đính kèm file');
     } finally {
@@ -254,7 +231,7 @@ export default function OperatingLicensesPage() {
             }
           : lic
       );
-      await persistLicenses(updated, 'Đã cập nhật thông tin giấy phép!');
+      await persistLicenses(updated, 'Đã cập nhật giấy phép!');
     } else {
       const newItem: LicenseItem = {
         id: `lic-${Date.now()}`,
@@ -265,7 +242,7 @@ export default function OperatingLicensesPage() {
         fileName: formFileName.trim() || undefined,
         updatedAt: new Date().toISOString(),
       };
-      await persistLicenses([newItem, ...licenses], 'Đã thêm giấy phép khai thác mới!');
+      await persistLicenses([newItem, ...licenses], 'Đã thêm giấy phép mới!');
     }
 
     setIsModalOpen(false);
@@ -277,14 +254,6 @@ export default function OperatingLicensesPage() {
     await persistLicenses(updated, `Đã xóa giấy phép "${item.name}".`);
   };
 
-  const todayStr = new Date().toLocaleDateString('vi-VN', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-
-  // Chuyển link Google Drive thông thường sang link embed preview nếu cần
   const getEmbedPreviewUrl = (url: string) => {
     const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (driveMatch) {
@@ -294,7 +263,18 @@ export default function OperatingLicensesPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-100/80 text-slate-800 font-sans overflow-y-auto p-6 space-y-4">
+    <div className="flex flex-col h-full bg-slate-50 text-slate-800 font-sans selection:bg-sky-500/20">
+      <style>{`
+        @keyframes driftCloudHeader1 {
+          0%, 100% { transform: translateX(0px); }
+          50% { transform: translateX(35px); }
+        }
+        @keyframes driftCloudHeader2 {
+          0%, 100% { transform: translateX(0px); }
+          50% { transform: translateX(-30px); }
+        }
+      `}</style>
+
       {/* Input ẩn phục vụ đính kèm nhanh file giấy phép */}
       <input
         ref={quickUploadInputRef}
@@ -304,26 +284,72 @@ export default function OperatingLicensesPage() {
         onChange={handleQuickUploadChange}
       />
 
-      {/* Top Pill Header */}
-      <div className="bg-white border border-slate-200 rounded-2xl px-5 py-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#1e3a5f]" />
-          <ShieldCheck className="w-4 h-4 text-rose-600" />
-          <span className="text-sm font-bold text-slate-900">Giấy phép khai thác</span>
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-2.5 py-0.5 rounded-full ml-1">
-            <CheckCircle2 className="w-3 h-3 text-sky-600" />
-            Radar Cảnh báo Hạn tự động
-          </span>
+      {/* Khối Tiêu đề: Nền Xanh Bầu Trời & Mây Trắng (Đồng bộ với tab Tài liệu) */}
+      <div className="relative bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8] border-b border-sky-300 shadow-sm shrink-0 overflow-hidden z-20">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
+          <svg
+            viewBox="0 0 220 80"
+            className="absolute -top-3 left-16 w-48 text-white/25 fill-current"
+            style={{ animation: 'driftCloudHeader1 14s ease-in-out infinite' }}
+          >
+            <path d="M40 65 H180 A18 18 0 0 0 180 30 A24 24 0 0 0 135 14 A30 30 0 0 0 75 20 A22 22 0 0 0 40 65 Z" />
+          </svg>
+          <svg
+            viewBox="0 0 240 80"
+            className="absolute top-1 left-[42%] w-52 text-white/30 fill-current"
+            style={{ animation: 'driftCloudHeader2 18s ease-in-out infinite' }}
+          >
+            <path d="M35 65 H195 A20 20 0 0 0 195 28 A26 26 0 0 0 148 12 A32 32 0 0 0 82 18 A24 24 0 0 0 35 65 Z" />
+          </svg>
+          <svg
+            viewBox="0 0 200 80"
+            className="absolute -bottom-4 right-24 w-48 text-white/25 fill-current"
+            style={{ animation: 'driftCloudHeader1 16s ease-in-out infinite' }}
+          >
+            <path d="M45 65 H165 A20 20 0 0 0 165 25 A22 22 0 0 0 125 12 A30 30 0 0 0 68 20 A24 24 0 0 0 45 65 Z" />
+          </svg>
         </div>
-        <div className="text-xs font-medium text-slate-600 bg-slate-100 px-3.5 py-1.5 rounded-full border border-slate-200 capitalize">
-          {todayStr}
-        </div>
+
+        <header className="h-14 flex items-center justify-between px-6 relative z-10">
+          <div className="flex items-center gap-2 text-white font-bold text-sm drop-shadow-2xs">
+            <ShieldCheck className="w-4 h-4 text-white" />
+            <span>Quản lý Giấy phép Khai thác Thiết bị &amp; Tần số</span>
+          </div>
+
+          <div className="flex items-center gap-2.5 ml-auto">
+            <div className="hidden sm:flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
+              <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="text-slate-600 font-medium">Supabase:</span>
+              <span className="text-emerald-600 font-bold font-mono">Ready</span>
+            </div>
+
+            <button
+              onClick={fetchLicenses}
+              disabled={isLoading}
+              className="p-2 bg-white/95 hover:bg-white border border-white text-slate-700 hover:text-sky-700 rounded-lg transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+              title="Làm mới danh sách"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+
+            {isAdmin && (
+              <button
+                onClick={openAddModal}
+                disabled={isSaving}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1b3252] hover:bg-slate-900 active:scale-95 text-white border border-white/25 rounded-lg text-xs font-semibold transition-all shadow-md cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Thêm giấy phép</span>
+              </button>
+            )}
+          </div>
+        </header>
       </div>
 
       {/* Toast thông báo */}
       {toast && (
         <div
-          className={`p-3 rounded-xl border text-xs flex items-center justify-between shadow-xs animate-in fade-in ${
+          className={`mx-6 mt-3 p-2.5 rounded-lg border text-xs flex items-center justify-between shadow-xs ${
             toast.type === 'success'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
               : 'bg-rose-50 border-rose-200 text-rose-800'
@@ -335,306 +361,252 @@ export default function OperatingLicensesPage() {
             ) : (
               <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             )}
-            <span className="font-semibold">{toast.text}</span>
+            <span className="font-medium">{toast.text}</span>
           </div>
-          <button onClick={() => setToast(null)} className="text-[11px] font-semibold underline ml-3">
+          <button onClick={() => setToast(null)} className="text-[11px] underline ml-3">
             Đóng
           </button>
         </div>
       )}
 
-      {/* 4 Thẻ Radar Cảnh báo Hạn tự động (Bấm để lọc nhanh) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <button
-          type="button"
-          onClick={() => setRadarFilter('ALL')}
-          className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-            radarFilter === 'ALL'
-              ? 'bg-[#1b3252] text-white border-[#1b3252] shadow-md'
-              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-2xs'
-          }`}
-        >
-          <div className="text-[11px] font-semibold uppercase tracking-wider opacity-80">
-            Tổng số giấy phép
-          </div>
-          <div className="text-2xl font-extrabold mt-1 flex items-baseline gap-1.5">
-            <span>{radarStats.total}</span>
-            <span className="text-xs font-normal opacity-75">giấy phép</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setRadarFilter('VALID')}
-          className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-            radarFilter === 'VALID'
-              ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
-              : 'bg-white hover:bg-emerald-50/40 border-emerald-200 text-slate-800 shadow-2xs'
-          }`}
-        >
-          <div className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className={radarFilter === 'VALID' ? 'text-white' : 'text-emerald-700'}>
-              Đang hiệu lực (&gt; 60 ngày)
+      {/* Thanh Tìm kiếm & Lọc cố định (Đồng bộ với tab Tài liệu) */}
+      <div className="px-6 py-2.5 bg-white border-b border-slate-200 shadow-2xs shrink-0 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-sky-600" />
+            <span>Danh sách giấy phép</span>
+            <span className="text-xs font-mono font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
+              {filteredLicenses.length}/{licenses.length}
             </span>
-          </div>
-          <div className="text-2xl font-extrabold mt-1 flex items-baseline gap-1.5">
-            <span>{radarStats.valid}</span>
-            <span className="text-xs font-normal opacity-75">an toàn</span>
-          </div>
-        </button>
+          </h3>
+          {(statusFilter !== 'ALL' || searchQuery.trim() !== '') && (
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('ALL');
+                setSearchQuery('');
+              }}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+              <span>Xóa bộ lọc</span>
+            </button>
+          )}
+        </div>
 
-        <button
-          type="button"
-          onClick={() => setRadarFilter('EXPIRING_SOON')}
-          className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-            radarFilter === 'EXPIRING_SOON'
-              ? 'bg-amber-500 text-white border-amber-500 shadow-md'
-              : 'bg-white hover:bg-amber-50/50 border-amber-200 text-slate-800 shadow-2xs'
-          }`}
-        >
-          <div className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-amber-500" />
-            <span className={radarFilter === 'EXPIRING_SOON' ? 'text-white' : 'text-amber-700'}>
-              Sắp hết hạn (≤ 60 ngày)
-            </span>
-          </div>
-          <div className="text-2xl font-extrabold mt-1 flex items-baseline gap-1.5">
-            <span>{radarStats.expiringSoon}</span>
-            <span className="text-xs font-normal opacity-75">cần chuẩn bị gia hạn</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setRadarFilter('EXPIRED')}
-          className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-            radarFilter === 'EXPIRED'
-              ? 'bg-rose-600 text-white border-rose-600 shadow-md'
-              : 'bg-white hover:bg-rose-50/50 border-rose-200 text-slate-800 shadow-2xs'
-          }`}
-        >
-          <div className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
-            <span className={radarFilter === 'EXPIRED' ? 'text-white' : 'text-rose-700'}>
-              Đã quá hạn
-            </span>
-          </div>
-          <div className="text-2xl font-extrabold mt-1 flex items-baseline gap-1.5">
-            <span>{radarStats.expired}</span>
-            <span className="text-xs font-normal opacity-75">cần xử lý ngay</span>
-          </div>
-        </button>
-      </div>
-
-      {/* Main Card Container */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        {/* Card Dark Navy Header */}
-        <div className="bg-[#1b3252] px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-bold text-white">Giấy phép khai thác</h2>
-            <p className="text-xs text-slate-300 mt-0.5">
-              Quản lý, đính kèm bản scan PDF và tự động cảnh báo thời hạn giấy phép thiết bị, tần số
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm kiếm giấy phép, thời hạn..."
-                className="bg-white text-slate-900 placeholder-slate-400 text-xs rounded-full pl-8 pr-7 py-2 w-60 focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-xs"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {isAdmin && (
+        <div className="flex flex-wrap items-center gap-2 flex-1 justify-end">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-600 w-3.5 h-3.5" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Tìm theo tên giấy phép, số hiệu, thời hạn..."
+              className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-sky-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all"
+            />
+            {searchQuery && (
               <button
-                onClick={openAddModal}
-                disabled={isSaving}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Thêm giấy phép mới</span>
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-        </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#162944] text-slate-200 text-[11px] font-bold uppercase tracking-wider border-t border-slate-700/60">
-                <th className="py-3.5 px-5 w-14">STT</th>
-                <th className="py-3.5 px-5">TÊN GIẤY PHÉP</th>
-                <th className="py-3.5 px-5 w-44 text-center">FILE ĐÍNH KÈM</th>
-                <th className="py-3.5 px-5 w-40 text-center">THỜI HẠN</th>
-                <th className="py-3.5 px-5 w-56 text-center">TÌNH TRẠNG (RADAR)</th>
-                <th className="py-3.5 px-5 w-40 text-center">HÀNH ĐỘNG</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
-                    <Loader2 className="w-5 h-5 animate-spin inline mr-2 text-sky-600" />
-                    Đang tải dữ liệu giấy phép...
-                  </td>
-                </tr>
-              ) : filteredLicenses.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
-                    Không có giấy phép nào khớp với bộ lọc hiện tại.
-                  </td>
-                </tr>
-              ) : (
-                filteredLicenses.map((item, idx) => {
-                  const ev = evaluateExpiry(item.expiryDate);
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/90 transition-colors">
-                      <td className="py-4 px-5 text-slate-500 font-medium">{idx + 1}</td>
-                      <td className="py-4 px-5">
-                        <div className="font-semibold text-slate-900">{item.name}</div>
-                        {item.licenseCode && (
-                          <span className="inline-block mt-0.5 font-mono text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
-                            {item.licenseCode}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Cột File đính kèm */}
-                      <td className="py-4 px-5 text-center">
-                        {item.fileUrl ? (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewItem(item)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-[11px] font-semibold transition-colors cursor-pointer max-w-[170px]"
-                            title={item.fileName || 'Xem file giấy phép đính kèm'}
-                          >
-                            <FileText className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">{item.fileName || 'Bản scan PDF'}</span>
-                          </button>
-                        ) : isAdmin ? (
-                          <button
-                            type="button"
-                            onClick={() => handleQuickUploadTrigger(item.id)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-dashed border-slate-300 hover:border-indigo-300 text-[11px] font-medium transition-colors cursor-pointer"
-                            title="Tải lên file PDF/Ảnh cho giấy phép này"
-                          >
-                            <Upload className="w-3 h-3" />
-                            <span>+ Đính kèm file</span>
-                          </button>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 italic">Chưa đính kèm</span>
-                        )}
-                      </td>
-
-                      <td className="py-4 px-5 text-center text-slate-700 font-mono font-semibold">
-                        {item.expiryDate}
-                      </td>
-
-                      {/* Cột Tình trạng tự động (Compliance Radar) */}
-                      <td className="py-4 px-5 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${ev.badgeClass}`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${ev.dotClass}`} />
-                          {ev.label}
-                        </span>
-                      </td>
-
-                      <td className="py-4 px-5">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => {
-                              if (item.fileUrl) {
-                                setPreviewItem(item);
-                              } else if (isAdmin) {
-                                handleQuickUploadTrigger(item.id);
-                              } else {
-                                showToast(
-                                  'error',
-                                  'Giấy phép này chưa được Admin đính kèm bản scan PDF.'
-                                );
-                              }
-                            }}
-                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                              item.fileUrl
-                                ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600'
-                                : 'bg-slate-100 hover:bg-slate-200 text-slate-400'
-                            }`}
-                            title={
-                              item.fileUrl
-                                ? 'Xem bản scan giấy phép'
-                                : isAdmin
-                                  ? 'Chưa có file — Bấm để tải file giấy phép lên'
-                                  : 'Chưa có file đính kèm'
-                            }
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          {isAdmin && (
-                            <>
-                              <button
-                                onClick={() => openEditModal(item)}
-                                className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 transition-colors cursor-pointer"
-                                title="Chỉnh sửa & cập nhật file (Admin)"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(item)}
-                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
-                                title="Xóa giấy phép (Admin)"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer Pagination */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/40 flex items-center justify-between text-xs text-slate-500">
-          <span>
-            Hiển thị {filteredLicenses.length} / {licenses.length} giấy phép khai thác
-          </span>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
             <button
-              disabled
-              className="w-7 h-7 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-400 disabled:opacity-50"
+              type="button"
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                statusFilter === 'ALL'
+                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            <button className="w-7 h-7 rounded-lg bg-[#1b3252] text-white font-semibold flex items-center justify-center text-xs shadow-2xs">
-              1
+              Tất cả
             </button>
             <button
-              disabled
-              className="w-7 h-7 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-400 disabled:opacity-50"
+              type="button"
+              onClick={() => setStatusFilter('VALID')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${
+                statusFilter === 'VALID'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              <ChevronRight className="w-3.5 h-3.5" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Còn hiệu lực
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('EXPIRING_SOON')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${
+                statusFilter === 'EXPIRING_SOON'
+                  ? 'bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Sắp hết hạn
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('EXPIRED')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${
+                statusFilter === 'EXPIRED'
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Quá hạn
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Vùng cuộn Bảng dữ liệu (Tiêu đề Freeze giống tab Tài liệu) */}
+      <div className="flex-1 overflow-y-auto px-6 pt-3 pb-12">
+        {isLoading ? (
+          <div className="p-16 flex flex-col items-center justify-center text-slate-500 text-xs gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-sky-600" />
+            <span>Đang tải danh sách giấy phép...</span>
+          </div>
+        ) : filteredLicenses.length === 0 ? (
+          <div className="p-16 flex flex-col items-center justify-center text-center">
+            <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 mb-3 shadow-xs">
+              <ShieldCheck className="w-6 h-6 text-sky-600" />
+            </div>
+            <h4 className="text-sm font-semibold text-slate-900 mb-1">
+              Không tìm thấy giấy phép phù hợp
+            </h4>
+            <p className="text-slate-500 text-xs max-w-sm">
+              Hãy thử từ khóa khác hoặc đặt lại bộ lọc trạng thái.
+            </p>
+          </div>
+        ) : (
+          <div className="border border-slate-200 rounded-xl bg-white shadow-xs">
+            {/* Table Header - FREEZE (Sticky top-0) */}
+            <div className="sticky top-0 z-20 h-11 px-4 flex items-center justify-between bg-slate-100/95 backdrop-blur-md text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 rounded-t-xl shadow-2xs">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <span className="w-8 text-center">STT</span>
+                <span className="flex-1">TÊN GIẤY PHÉP</span>
+              </div>
+              <div className="flex items-center gap-4 shrink-0 text-right">
+                <span className="w-32 text-left hidden sm:inline">SỐ / KÝ HIỆU</span>
+                <span className="w-32 text-center">THỜI HẠN</span>
+                <span className="w-40 text-center">HIỆU LỰC</span>
+                <span className="w-28 text-right">THAO TÁC</span>
+              </div>
+            </div>
+
+            {/* Table Rows */}
+            <div className="divide-y divide-slate-100">
+              {filteredLicenses.map((item, idx) => {
+                const ev = evaluateExpiry(item.expiryDate);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      if (item.fileUrl) setPreviewItem(item);
+                      else if (isAdmin) openEditModal(item);
+                    }}
+                    className="h-14 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group cursor-pointer last:rounded-b-xl bg-white"
+                  >
+                    {/* Trái: STT + Icon + Tên giấy phép */}
+                    <div className="flex items-center gap-3 min-w-0 pr-4 flex-1">
+                      <span className="w-8 text-center text-xs text-slate-400 font-mono">
+                        {idx + 1}
+                      </span>
+                      <FileText
+                        className={`w-4 h-4 shrink-0 ${
+                          item.fileUrl ? 'text-indigo-600' : 'text-slate-400'
+                        }`}
+                      />
+                      <span
+                        className="text-xs font-semibold text-slate-900 group-hover:text-indigo-600 truncate"
+                        title={item.name}
+                      >
+                        {item.name}
+                      </span>
+                    </div>
+
+                    {/* Phải: Các cột thông tin & Thao tác gọn */}
+                    <div className="flex items-center gap-4 shrink-0">
+                      <span className="w-32 text-left font-mono text-xs text-indigo-700 font-semibold truncate hidden sm:inline">
+                        {item.licenseCode || '---'}
+                      </span>
+
+                      <span className="w-32 text-center font-mono text-xs text-slate-700">
+                        {item.expiryDate}
+                      </span>
+
+                      <span className="w-40 text-center">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${ev.badgeClass}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${ev.dotClass}`} />
+                          <span className="truncate">{ev.shortLabel}</span>
+                        </span>
+                      </span>
+
+                      {/* Cột Thao tác: Chỉ dùng icon gọn w-3.5 h-3.5 giống tab Tài liệu */}
+                      <div
+                        className="w-28 text-right flex items-center justify-end gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => {
+                            if (item.fileUrl) setPreviewItem(item);
+                            else if (isAdmin) handleQuickUploadTrigger(item.id);
+                            else showToast('error', 'Giấy phép này chưa có bản scan đính kèm.');
+                          }}
+                          className={`p-1.5 rounded transition-colors cursor-pointer ${
+                            item.fileUrl
+                              ? 'hover:bg-indigo-50 text-indigo-600'
+                              : 'hover:bg-slate-100 text-slate-400'
+                          }`}
+                          title={item.fileUrl ? 'Xem bản scan giấy phép' : 'Chưa có file đính kèm'}
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={() => handleQuickUploadTrigger(item.id)}
+                              className="p-1.5 rounded hover:bg-sky-50 text-slate-500 hover:text-sky-600 transition-colors cursor-pointer"
+                              title={
+                                item.fileUrl
+                                  ? `Đổi file đính kèm (${item.fileName || 'Đã có file'})`
+                                  : 'Đính kèm file PDF/Ảnh giấy phép'
+                              }
+                            >
+                              <Upload className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => openEditModal(item)}
+                              className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                              title="Chỉnh sửa giấy phép"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item)}
+                              className="p-1.5 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                              title="Xóa giấy phép"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Thêm / Chỉnh sửa Giấy phép khai thác */}
@@ -643,7 +615,7 @@ export default function OperatingLicensesPage() {
           <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150">
             <div className="px-6 py-4 bg-[#1b3252] text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-sky-400" />
+                <ShieldCheck className="w-4 h-4 text-sky-400" />
                 <h3 className="text-sm font-bold">
                   {editingItem ? 'Chỉnh sửa Giấy phép khai thác' : 'Thêm Giấy phép khai thác mới'}
                 </h3>
@@ -674,7 +646,7 @@ export default function OperatingLicensesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1.5">
-                    Số giấy phép / Mã ký hiệu
+                    Số giấy phép / Ký hiệu
                   </label>
                   <input
                     type="text"
@@ -710,23 +682,22 @@ export default function OperatingLicensesPage() {
                 </div>
               </div>
 
-              {/* Đính kèm file PDF / Ảnh giấy phép */}
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-slate-700 flex items-center gap-1.5">
                     <Paperclip className="w-3.5 h-3.5 text-sky-600" />
-                    <span>File Giấy phép đính kèm (PDF / Ảnh bản scan)</span>
+                    <span>File Giấy phép đính kèm (PDF / Ảnh)</span>
                   </label>
                   <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-semibold cursor-pointer transition-colors shadow-2xs">
                     {isUploadingFile ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Đang tải lên...</span>
+                        <span>Đang tải...</span>
                       </>
                     ) : (
                       <>
                         <Upload className="w-3.5 h-3.5" />
-                        <span>Chọn file từ máy</span>
+                        <span>Chọn file</span>
                       </>
                     )}
                     <input
@@ -744,7 +715,7 @@ export default function OperatingLicensesPage() {
                     <div className="flex items-center gap-2 truncate">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                       <span className="font-medium truncate">
-                        {formFileName || 'Đã đính kèm file giấy phép'}
+                        {formFileName || 'Đã đính kèm file'}
                       </span>
                     </div>
                     <button
@@ -755,7 +726,7 @@ export default function OperatingLicensesPage() {
                       }}
                       className="text-rose-600 hover:underline text-[11px] font-semibold ml-2 shrink-0"
                     >
-                      Gỡ file
+                      Gỡ
                     </button>
                   </div>
                 ) : (
@@ -766,7 +737,7 @@ export default function OperatingLicensesPage() {
                       setFormFileUrl(e.target.value);
                       if (!formFileName) setFormFileName('File Google Drive / Link');
                     }}
-                    placeholder="Hoặc dán trực tiếp đường link file PDF / Google Drive vào đây..."
+                    placeholder="Hoặc dán đường link file PDF / Google Drive vào đây..."
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-sky-500"
                   />
                 )}
@@ -793,7 +764,7 @@ export default function OperatingLicensesPage() {
         </div>
       )}
 
-      {/* Modal Xem trước File Giấy phép (PDF / Ảnh) */}
+      {/* Modal Xem trước File Giấy phép */}
       {previewItem && previewItem.fileUrl && (
         <div
           className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4"
@@ -803,7 +774,7 @@ export default function OperatingLicensesPage() {
             className="bg-white border border-slate-200 rounded-2xl max-w-5xl w-full h-[88vh] flex flex-col overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-5 py-3.5 bg-[#1b3252] text-white flex items-center justify-between shrink-0">
+            <div className="px-5 py-3 bg-[#1b3252] text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5 min-w-0">
                 <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span className="text-sm font-bold truncate">{previewItem.name}</span>
@@ -816,7 +787,7 @@ export default function OperatingLicensesPage() {
                   href={previewItem.fileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>Mở tab mới</span>
