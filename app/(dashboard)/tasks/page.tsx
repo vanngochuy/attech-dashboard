@@ -667,19 +667,41 @@ export default function EmailDocumentTasksPage() {
         <header className="h-14 flex items-center justify-between px-6 relative z-10">
           <div className="flex items-center gap-2 text-white font-bold text-sm drop-shadow-2xs">
             <MailSearch className="w-4 h-4 text-white" />
-            <span>Công việc: Lọc PDF Email (Văn bản chưa chính thức) &amp; Đối chiếu Tài liệu</span>
+            <span>Văn bản chưa đối chiếu</span>
           </div>
 
           <div className="flex items-center gap-2.5 ml-auto">
+            {/* Cụm Thao tác Xóa hàng loạt khi tick chọn văn bản (đặt cố định trên Header, không làm nhảy layout bảng) */}
+            {selectedIds.length > 0 && isAdmin && (
+              <div className="flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-rose-300 text-xs shadow-sm animate-in fade-in duration-150">
+                <span className="text-slate-700 font-medium">
+                  Đã chọn: <strong className="text-rose-600 font-mono font-bold">{selectedIds.length}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleBatchDelete}
+                  disabled={isSaving}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded text-xs font-bold transition-all shadow-xs cursor-pointer border border-rose-500"
+                  title="Xóa các văn bản đã tick chọn"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Xóa</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds([])}
+                  className="text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer ml-0.5"
+                  title="Bỏ chọn tất cả"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <div className="hidden md:flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
               <MailSearch className="w-3.5 h-3.5 text-sky-600 shrink-0" />
               <span className="text-slate-600 font-medium">Hộp thư:</span>
               <span className="text-sky-700 font-bold font-mono">tuh@attech.com.vn</span>
-            </div>
-            <div className="hidden xl:flex items-center gap-1.5 bg-white/95 px-2.5 py-1.5 rounded-lg border border-white text-xs shadow-xs">
-              <FolderGit2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span className="text-slate-600 font-medium">Google Drive:</span>
-              <span className="text-amber-700 font-bold font-mono">ATTECH_DOCUMENTS/03_TÀI LIỆU CHƯA XÁC THỰC</span>
             </div>
 
             {/* Nút Quét Email & Đối chiếu thường */}
@@ -709,7 +731,7 @@ export default function EmailDocumentTasksPage() {
               </button>
             )}
 
-            {/* Nút Bật Hàng đợi AI quét 2 trang đầu an toàn (Free Tier Safe: 12 file/phút < 15 RPM) */}
+            {/* Nút Quét AI cố định trên Header */}
             {isAdmin && (
               <button
                 onClick={handleToggleAiQueue}
@@ -732,7 +754,7 @@ export default function EmailDocumentTasksPage() {
                 ) : (
                   <>
                     <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                    <span>AI Quét hàng đợi</span>
+                    <span>Quét AI</span>
                   </>
                 )}
               </button>
@@ -950,112 +972,73 @@ export default function EmailDocumentTasksPage() {
             </p>
           </div>
         ) : (
-          <>
-            {/* Thanh Thao Tác Hàng Loạt (Hiện khi có văn bản được tick chọn) */}
-            {selectedIds.length > 0 && (
-              <div className="mb-3 px-4 py-2.5 bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-200 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-sky-600 text-white font-bold text-xs shadow-2xs">
-                      {selectedIds.length}
-                    </span>
-                    <span className="text-xs font-bold text-slate-800">
-                      văn bản đã chọn
-                    </span>
-                  </div>
-                  <div className="h-4 w-px bg-slate-300" />
-                  <button
-                    type="button"
-                    onClick={() => setSelectedIds(filteredDrafts.map((d) => d.id))}
-                    className="text-xs font-semibold text-sky-700 hover:text-sky-900 hover:underline cursor-pointer"
-                  >
-                    Chọn tất cả {filteredDrafts.length} văn bản
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedIds([])}
-                    className="text-xs font-medium text-slate-500 hover:text-slate-800 hover:underline cursor-pointer"
-                  >
-                    Bỏ chọn
-                  </button>
+          <div className="border border-slate-200 rounded-xl bg-white shadow-xs">
+            {/* Table Header - FREEZE (Sticky top-0 z-20) */}
+            <div className="sticky top-0 z-20 h-11 px-4 flex items-center justify-between bg-slate-100/95 backdrop-blur-md text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 rounded-t-xl shadow-2xs">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                {/* Ô Checkbox Chọn tất cả trên trang hiện tại */}
+                <div className="w-6 flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={paginatedDrafts.length > 0 && paginatedDrafts.every((d) => selectedIds.includes(d.id))}
+                    onChange={() => {
+                      const pageIds = paginatedDrafts.map((d) => d.id);
+                      const isAllPageSelected = pageIds.length > 0 && pageIds.every((d) => selectedIds.includes(d));
+                      if (isAllPageSelected) {
+                        setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+                      } else {
+                        setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer accent-sky-600"
+                    title="Chọn / Bỏ chọn tất cả văn bản trên trang này"
+                  />
                 </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Nút Đọc AI 2 trang cho các file đã tick */}
-                  <button
-                    type="button"
-                    onClick={handleBatchAiScan}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs cursor-pointer transition-all border ${
-                      isBatchAiRunning
-                        ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-500 animate-pulse'
-                        : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500'
-                    }`}
-                    title="Đọc 2 trang đầu bằng AI cho các văn bản đã tick chọn"
-                  >
-                    {isBatchAiRunning ? (
-                      <>
-                        <Pause className="w-3.5 h-3.5" />
-                        <span>Dừng đọc AI ({batchAiProgress?.current}/{batchAiProgress?.total})</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Đọc AI 2 trang ({selectedIds.length} file)</span>
-                      </>
-                    )}
-                  </button>
-
-                  {/* Nút Xóa nhiều file cùng lúc */}
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={handleBatchDelete}
-                      disabled={isSaving || isBatchAiRunning}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer transition-all disabled:opacity-50 border border-rose-500"
-                      title="Xóa vĩnh viễn các văn bản đã chọn khỏi danh sách"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Xóa đã chọn ({selectedIds.length} file)</span>
-                    </button>
+                <span className="w-8 text-center">STT</span>
+                <div className="flex-1 min-w-0 flex items-center gap-2">
+                  <span className="truncate">VĂN BẢN</span>
+                  {selectedIds.length > 0 && (
+                    <div className="normal-case font-normal text-slate-500 text-[11px] flex items-center gap-2 shrink-0">
+                      <span>(Đã chọn <strong className="text-sky-700 font-bold font-mono">{selectedIds.length}</strong>)</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedIds(filteredDrafts.map((d) => d.id))}
+                        className="text-sky-600 hover:text-sky-800 underline font-medium cursor-pointer"
+                      >
+                        Chọn tất cả {filteredDrafts.length}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedIds([])}
+                        className="text-slate-400 hover:text-slate-600 underline cursor-pointer"
+                      >
+                        Bỏ chọn
+                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={handleBatchDelete}
+                          disabled={isSaving}
+                          className="flex items-center gap-1 px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-bold shadow-2xs transition-all cursor-pointer"
+                          title="Xóa các văn bản đã chọn"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Xóa ({selectedIds.length})</span>
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
-            )}
-
-            <div className="border border-slate-200 rounded-xl bg-white shadow-xs">
-              {/* Table Header - FREEZE (Sticky top-0 z-20) */}
-              <div className="sticky top-0 z-20 h-11 px-4 flex items-center justify-between bg-slate-100/95 backdrop-blur-md text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 rounded-t-xl shadow-2xs">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  {/* Ô Checkbox Chọn tất cả trên trang hiện tại */}
-                  <div className="w-6 flex items-center justify-center">
-                    <input
-                      type="checkbox"
-                      checked={paginatedDrafts.length > 0 && paginatedDrafts.every((d) => selectedIds.includes(d.id))}
-                      onChange={() => {
-                        const pageIds = paginatedDrafts.map((d) => d.id);
-                        const isAllPageSelected = pageIds.length > 0 && pageIds.every((d) => selectedIds.includes(d));
-                        if (isAllPageSelected) {
-                          setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
-                        } else {
-                          setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
-                        }
-                      }}
-                      className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer accent-sky-600"
-                      title="Chọn / Bỏ chọn tất cả văn bản trên trang này"
-                    />
-                  </div>
-                  <span className="w-8 text-center">STT</span>
-                  <span className="flex-1">VĂN BẢN (TRÍCH YẾU)</span>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 text-right">
-                  <span className="w-32 text-left hidden sm:inline">SỐ KÝ HIỆU</span>
-                  <span className="w-40 text-left hidden md:inline">CƠ QUAN BAN HÀNH</span>
-                  <span className="w-24 text-center hidden lg:inline">BAN HÀNH</span>
-                  <span className="w-28 text-center hidden xl:inline">NGÀY EMAIL</span>
-                  <span className="w-36 text-center">ĐỐI CHIẾU</span>
-                  <span className="w-32 text-right">THAO TÁC</span>
-                </div>
+              <div className="flex items-center gap-3 shrink-0 text-right">
+                <span className="w-32 text-left hidden sm:inline">SỐ/KÝ HIỆU</span>
+                <span className="w-40 text-left hidden md:inline">CƠ QUAN BAN HÀNH</span>
+                <span className="w-24 text-center hidden lg:inline">BAN HÀNH</span>
+                <span className="w-28 text-center hidden xl:inline">NGÀY EMAIL</span>
+                <span className="w-36 text-center">ĐỐI CHIẾU</span>
+                <span className="w-32 text-right">THAO TÁC</span>
               </div>
+            </div>
 
               {/* Table Rows (Duyệt qua paginatedDrafts theo trang) */}
               <div className="divide-y divide-slate-100">
@@ -1296,7 +1279,6 @@ export default function EmailDocumentTasksPage() {
               </div>
             </div>
           </div>
-        </>
         )}
       </div>
 

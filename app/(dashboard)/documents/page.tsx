@@ -49,7 +49,7 @@ import { useAuth } from '@/components/auth-context';
 
 // Danh mục Chuyên môn
 const DEPARTMENTS = [
-  { id: 'ALL', label: 'Tất cả chuyên môn', dot: 'bg-slate-400', icon: Layers },
+  { id: 'ALL', label: 'Tất cả', dot: 'bg-slate-400', icon: Layers },
   { id: 'VB_PHAP_LUAT', label: 'Văn bản Pháp luật & Quy chế', dot: 'bg-blue-500', icon: Scale },
   { id: 'QL_KY_THUAT', label: 'Quản lý Kỹ thuật (CNS, Selex)', dot: 'bg-indigo-500', icon: Wrench },
   { id: 'SMS', label: 'An toàn (SMS)', dot: 'bg-emerald-500', icon: ShieldCheck },
@@ -250,7 +250,7 @@ function DocumentsContent() {
 
   // Chia sẻ danh sách đang lọc cho Trợ lý AI nổi
   useEffect(() => {
-    const label = DEPARTMENTS.find((d) => d.id === activeFilter)?.label || 'Tất cả chuyên môn';
+    const label = DEPARTMENTS.find((d) => d.id === activeFilter)?.label || 'Tất cả';
     setDocsContext(
       filteredDocuments.map((d) => ({
         id: d.id,
@@ -448,16 +448,14 @@ function DocumentsContent() {
           </div>
         </header>
 
-        {/* Sub-header / Filter Pills Bar (Trên nền bầu trời mây trắng) */}
-        <div className="px-6 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar relative z-10 bg-white/15 backdrop-blur-xs">
+        {/* Sub-header / Filter Pills Bar (Dạng mờ Glassmorphism trên nền bầu trời mây trắng) */}
+        <div className="px-6 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar relative z-10 bg-white/10 backdrop-blur-sm border-t border-white/20">
           {/* Department Pills */}
           <div className="flex items-center gap-2">
-            <div className="text-white text-xs uppercase tracking-wider font-bold mr-1 flex items-center gap-1.5 shrink-0 drop-shadow-2xs">
-              <Filter className="w-3.5 h-3.5 text-white" /> Chuyên môn:
-            </div>
             {DEPARTMENTS.map((dept) => {
               const isActive = activeFilter === dept.id;
               const count = departmentCounts[dept.id] || 0;
+              const DeptIcon = dept.icon;
               return (
                 <button
                   key={dept.id}
@@ -465,18 +463,28 @@ function DocumentsContent() {
                     setActiveFilter(dept.id);
                     setFilterMissingOnly(false);
                   }}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${isActive
-                      ? 'bg-[#1b3252] text-white shadow-md border border-white/40'
-                      : 'bg-white/95 text-slate-800 hover:bg-white border border-white shadow-xs'
-                    }`}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs transition-all shrink-0 cursor-pointer ${
+                    isActive
+                      ? 'bg-white text-sky-950 font-bold shadow-md border border-white'
+                      : 'bg-white/20 hover:bg-white/30 text-white hover:text-white font-medium border border-white/30 hover:border-white/50 backdrop-blur-md shadow-xs drop-shadow-2xs'
+                  }`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${dept.dot}`} />
+                  <span
+                    className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                      isActive
+                        ? 'bg-sky-600 text-white shadow-2xs'
+                        : 'bg-white/20 backdrop-blur-md border border-white/30 text-white shadow-2xs'
+                    }`}
+                  >
+                    <DeptIcon className="w-3 h-3" />
+                  </span>
                   <span>{dept.label}</span>
                   <span
-                    className={`text-[11px] font-mono px-1.5 py-0.2 rounded-full ${isActive
-                        ? 'bg-sky-500 text-white font-bold'
-                        : 'bg-sky-50 text-sky-800 border border-sky-200'
-                      }`}
+                    className={`text-[11px] font-mono px-1.5 py-0.2 rounded-full transition-colors ${
+                      isActive
+                        ? 'bg-sky-100 text-sky-800 font-bold border border-sky-200'
+                        : 'bg-white/20 text-white font-semibold border border-white/25'
+                    }`}
                   >
                     {count}
                   </span>
