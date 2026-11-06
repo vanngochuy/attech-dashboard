@@ -30,6 +30,7 @@ import {
   RefreshCw,
   ShieldAlert,
   Loader2,
+  Sparkles,
   Scale,
   Building,
   Hash,
@@ -198,6 +199,51 @@ function DocumentsContent() {
   const [filterMissingOnly, setFilterMissingOnly] = useState(false);
   const [isDbConfigured, setIsDbConfigured] = useState(true);
 
+  // Trạng thái Tìm kiếm ngữ nghĩa bằng AI (Tìm AI)
+  const [isAiSearchMode, setIsAiSearchMode] = useState(false);
+  const [isAiSearching, setIsAiSearching] = useState(false);
+  const [aiSearchResults, setAiSearchResults] = useState<{ id: string; relevance: string; snippet: string }[] | null>(null);
+  const [aiSearchSummary, setAiSearchSummary] = useState<string | null>(null);
+
+  const handleTriggerAiSearch = async (overrideQuery?: string) => {
+    const q = (overrideQuery ?? searchQuery).trim();
+    if (!q) {
+      setAiSearchResults(null);
+      setAiSearchSummary(null);
+      return;
+    }
+
+    setIsAiSearching(true);
+    setAiSearchSummary(null);
+
+    try {
+      const res = await fetch('/api/documents/search-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, dept: activeFilter }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Lỗi khi tìm kiếm AI');
+      }
+
+      if (Array.isArray(data.results)) {
+        setAiSearchResults(data.results);
+        if (data.results.length === 0) {
+          setAiSearchSummary(`AI đã quét toàn bộ văn bản nhưng không tìm thấy nội dung phù hợp với "${q}".`);
+        } else {
+          setAiSearchSummary(`AI tìm thấy ${data.results.length} tài liệu có nội dung phù hợp với "${q}".`);
+        }
+      }
+    } catch (err: any) {
+      console.error('[AI Search Error]:', err);
+      alert(err.message || 'Lỗi tìm kiếm AI');
+    } finally {
+      setIsAiSearching(false);
+    }
+  };
+
   // Trạng thái Quét trực tiếp Google Drive cho Admin
   const [isScanningDrive, setIsScanningDrive] = useState(false);
   const [scanNotification, setScanNotification] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -349,9 +395,46 @@ function DocumentsContent() {
       .map(([year, count]) => ({ year, count }));
   }, [documents]);
 
-  // Bộ lọc tìm kiếm đa trường & đa từ khóa thông minh:
-  // Không cần gõ khớp nguyên chuỗi, chỉ cần gõ vài từ khóa rời rạc (VD: "mối nguy 2025", "alos attech 2026", "pccc vatm")
+  // Bộ lọc tìm kiếm đa trường & đa từ khóa thông minh HOẶC Tìm kiếm AI:
+  // - Chế độ Tìm nhanh: Lọc tức thì (tên văn bản, số hiệu, đơn vị, năm)
+  // - Chế độ Tìm AI: Lọc sâu vào nội dung toàn văn theo độ liên quan từ Gemini
   const filteredDocuments = useMemo(() => {
+    // 1. Nếu đang ở chế độ Tìm AI và đã có kết quả từ AI
+    if (isAiSearchMode && aiSearchResults !== null) {
+      const idOrderMap = new Map(aiSearchResults.map((r, i) => [r.id, i]));
+      const matchedDocs = documents.filter((doc) => idOrderMap.has(doc.id));
+
+      const furtherFiltered = matchedDocs.filter((doc) => {
+        const matchesDept = activeFilter === 'ALL' || doc.department_access?.includes(activeFilter);
+        if (!matchesDept) return false;
+
+        if (issuerFilter !== 'ALL') {
+          const docIssuerShort = abbreviateIssuer(doc.issuing_authority);
+          if (docIssuerShort !== issuerFilter) return false;
+        }
+
+        const docYear = doc.issue_date ? String(new Date(doc.issue_date).getFullYear()) : '';
+        if (yearFilter !== 'ALL' && docYear !== yearFilter) return false;
+
+        const matchesMissing = filterMissingOnly ? doc.sync_status === 'missing_on_drive' : true;
+        if (!matchesMissing) return false;
+
+        const matchesStatus =
+          statusFilter === 'ALL'
+            ? true
+            : statusFilter === 'ACTIVE'
+              ? doc.status !== 'SUPERSEDED'
+              : doc.status === 'SUPERSEDED';
+        if (!matchesStatus) return false;
+
+        return true;
+      });
+
+      // Sắp xếp thứ tự văn bản phù hợp nhất lên đầu
+      return furtherFiltered.sort((a, b) => (idOrderMap.get(a.id) ?? 999) - (idOrderMap.get(b.id) ?? 999));
+    }
+
+    // 2. Chế độ Tìm nhanh mặc định:
     const queryTokens = normalizeSearchText(searchQuery)
       .split(' ')
       .filter((t) => t.length > 0);
@@ -406,7 +489,7 @@ function DocumentsContent() {
 
       return true;
     });
-  }, [documents, searchQuery, filterMissingOnly, statusFilter, activeFilter, issuerFilter, yearFilter]);
+  }, [documents, searchQuery, isAiSearchMode, aiSearchResults, filterMissingOnly, statusFilter, activeFilter, issuerFilter, yearFilter]);
 
   // Chia sẻ danh sách đang lọc cho Trợ lý AI nổi
   useEffect(() => {
@@ -791,28 +874,82 @@ function DocumentsContent() {
             )}
           </div>
 
-          {/* Phải: Các trường lọc nâng cao (Từ khóa + Chuyên môn + Đơn vị ban hành + Năm ban hành + Hiệu lực) */}
+          {/* Phải: Các trường lọc nâng cao (Từ khóa / Tìm AI + Chuyên môn + Đơn vị ban hành + Năm ban hành + Hiệu lực) */}
           <div className="flex flex-wrap items-center gap-2 flex-1 justify-end">
-            {/* Ô tìm kiếm từ khóa trực tiếp (Hỗ trợ gõ tên + năm + đơn vị không cần đúng thứ tự) */}
-            <div className="relative flex-1 min-w-[240px] max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-600 w-3.5 h-3.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm từ khóa: tên văn bản + năm, số hiệu, đơn vị (VD: an toàn 2025)..."
-                className="w-full bg-slate-50 focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
-                  title="Xóa từ khóa"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+            {/* Cụm Tìm kiếm: Ô nhập liệu + Nút Tìm AI */}
+            <div className="flex items-center gap-1.5 flex-1 min-w-[280px] max-w-lg">
+              <div className="relative flex-1">
+                {isAiSearching ? (
+                  <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-600 w-3.5 h-3.5 animate-spin" />
+                ) : isAiSearchMode ? (
+                  <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-600 w-3.5 h-3.5" />
+                ) : (
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-600 w-3.5 h-3.5" />
+                )}
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && isAiSearchMode) {
+                      handleTriggerAiSearch();
+                    }
+                  }}
+                  placeholder={
+                    isAiSearchMode
+                      ? 'Nhập nội dung cần tìm (VD: khai thác thiết bị vor)... (Nhấn Enter)'
+                      : 'Tìm từ khóa: tên văn bản + năm, số hiệu, đơn vị (VD: an toàn 2025)...'
+                  }
+                  className={`w-full rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-hidden transition-all ${
+                    isAiSearchMode
+                      ? 'bg-indigo-50/50 focus:bg-white border border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 shadow-2xs'
+                      : 'bg-slate-50 focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15'
+                  }`}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      if (isAiSearchMode) {
+                        setAiSearchResults(null);
+                        setAiSearchSummary(null);
+                      }
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 cursor-pointer"
+                    title="Xóa từ khóa"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Nút Tìm AI */}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextMode = !isAiSearchMode;
+                  setIsAiSearchMode(nextMode);
+                  if (!nextMode) {
+                    setAiSearchResults(null);
+                    setAiSearchSummary(null);
+                  } else if (searchQuery.trim()) {
+                    handleTriggerAiSearch();
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer shrink-0 ${
+                  isAiSearchMode
+                    ? 'bg-gradient-to-r from-indigo-600 via-sky-600 to-indigo-700 text-white shadow-indigo-500/25 ring-2 ring-indigo-400/80 active:scale-95'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 active:scale-95'
+                }`}
+                title={isAiSearchMode ? 'Tắt chế độ Tìm AI (quay về Tìm nhanh)' : 'Bật chế độ Tìm AI (quét sâu nội dung bên trong văn bản)'}
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${isAiSearchMode ? 'text-amber-300 animate-pulse' : 'text-indigo-600'}`} />
+                <span>Tìm AI</span>
+                {isAiSearchMode && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping ml-0.5" />
+                )}
+              </button>
             </div>
 
             {/* Trường lọc: Chuyên môn */}
@@ -918,6 +1055,53 @@ function DocumentsContent() {
 
       {/* Main Document Content */}
       <div className="flex-1 overflow-y-auto">
+        {/* Banner trạng thái Tìm AI */}
+        {isAiSearchMode && (
+          <div className="px-6 py-2.5 bg-gradient-to-r from-indigo-50/90 via-sky-50/90 to-purple-50/90 border-b border-indigo-100 flex items-center justify-between text-xs text-indigo-900 shadow-2xs">
+            <div className="flex items-center gap-2 min-w-0">
+              {isAiSearching ? (
+                <>
+                  <Loader2 className="w-4 h-4 text-indigo-600 animate-spin shrink-0" />
+                  <span className="font-medium text-indigo-900">
+                    Trợ lý AI đang đọc quét toàn văn nội dung tài liệu...
+                  </span>
+                </>
+              ) : aiSearchSummary ? (
+                <>
+                  <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span className="font-semibold text-indigo-950 truncate">{aiSearchSummary}</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span className="text-slate-700">
+                    Chế độ <strong>Tìm AI</strong> đang bật: Nhập nội dung tự nhiên vào ô tìm kiếm rồi nhấn <strong>Enter</strong> để quét nội dung toàn văn.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerAiSearch()}
+                    disabled={!searchQuery.trim()}
+                    className="ml-2 px-2.5 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold text-[11px] shadow-2xs cursor-pointer"
+                  >
+                    Quét tìm ngay
+                  </button>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsAiSearchMode(false);
+                setAiSearchResults(null);
+                setAiSearchSummary(null);
+              }}
+              className="text-xs text-indigo-600 hover:text-indigo-800 underline cursor-pointer shrink-0 ml-4 font-medium"
+            >
+              Tắt Tìm AI
+            </button>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="p-16 flex flex-col items-center justify-center text-slate-500 text-xs gap-3">
             <div className="w-6 h-6 border-2 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin" />
@@ -993,20 +1177,21 @@ function DocumentsContent() {
                       const docCode = `DOC-${doc.id.slice(0, 6).toUpperCase()}`;
                       const isMissingOnDrive = doc.sync_status === 'missing_on_drive';
                       const isSuperseded = doc.status === 'SUPERSEDED';
+                      const aiSnippet = isAiSearchMode ? aiSearchResults?.find((r) => r.id === doc.id)?.snippet : null;
 
                       return (
                         <div
                           key={doc.id}
-                          className={`h-14 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group last:rounded-b-xl ${isMissingOnDrive
+                          className={`min-h-14 py-2.5 px-4 flex items-center justify-between hover:bg-slate-50 transition-colors group last:rounded-b-xl ${isMissingOnDrive
                               ? 'bg-rose-50/30'
                               : isSuperseded
                                 ? 'bg-amber-50/20'
                                 : 'bg-white'
                             }`}
                         >
-                          {/* Left: Icon + File Name -> Nhấn vào TÊN VĂN BẢN để mở xem trước */}
+                          {/* Left: Icon + File Name + Snippet -> Nhấn vào TÊN VĂN BẢN để mở xem trước */}
                           <div
-                            className={`flex items-center gap-3 min-w-0 pr-4 flex-1 ${
+                            className={`flex items-start gap-3 min-w-0 pr-4 flex-1 ${
                               !isMissingOnDrive ? 'cursor-pointer group/title' : 'cursor-not-allowed'
                             }`}
                             onClick={() => {
@@ -1014,17 +1199,27 @@ function DocumentsContent() {
                             }}
                             title={!isMissingOnDrive ? `Nhấn để xem trước: ${doc.file_name}` : 'File bị mất trên Google Drive'}
                           >
-                            <div className="shrink-0">{getFileIcon(doc.file_name)}</div>
-                            <span
-                              className={`text-xs font-semibold truncate ${isMissingOnDrive
-                                  ? 'text-slate-400 line-through decoration-rose-500/50'
-                                  : isSuperseded
-                                    ? 'text-slate-600 group-hover/title:text-indigo-600 group-hover/title:underline'
-                                    : 'text-slate-900 group-hover/title:text-indigo-600 group-hover/title:underline'
-                                } transition-colors`}
-                            >
-                              {doc.file_name}
-                            </span>
+                            <div className="shrink-0 mt-0.5">{getFileIcon(doc.file_name)}</div>
+                            <div className="min-w-0 flex-1">
+                              <span
+                                className={`text-xs font-semibold block truncate ${isMissingOnDrive
+                                    ? 'text-slate-400 line-through decoration-rose-500/50'
+                                    : isSuperseded
+                                      ? 'text-slate-600 group-hover/title:text-indigo-600 group-hover/title:underline'
+                                      : 'text-slate-900 group-hover/title:text-indigo-600 group-hover/title:underline'
+                                  } transition-colors`}
+                              >
+                                {doc.file_name}
+                              </span>
+                              {aiSnippet && (
+                                <div className="mt-1 flex items-start gap-1.5 text-[11px] text-indigo-950 bg-indigo-50/90 px-2 py-0.5 rounded border border-indigo-200/70 max-w-2xl">
+                                  <Sparkles className="w-3 h-3 text-indigo-600 shrink-0 mt-0.5" />
+                                  <span className="line-clamp-2">
+                                    <strong className="font-semibold text-indigo-800">Trích dẫn AI:</strong> {aiSnippet}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           {/* Right Columns */}
@@ -1215,6 +1410,7 @@ function DocumentsContent() {
                   const docCode = `DOC-${doc.id.slice(0, 6).toUpperCase()}`;
                   const isMissingOnDrive = doc.sync_status === 'missing_on_drive';
                   const isSuperseded = doc.status === 'SUPERSEDED';
+                  const aiSnippet = isAiSearchMode ? aiSearchResults?.find((r) => r.id === doc.id)?.snippet : null;
 
                   return (
                     <div
@@ -1438,6 +1634,17 @@ function DocumentsContent() {
                           />
                         </div>
                       </div>
+
+                      {/* Trích đoạn nội dung khớp do AI tìm thấy */}
+                      {aiSnippet && (
+                        <div className="px-3.5 py-2 bg-indigo-50/90 border-t border-indigo-100 text-[11px] text-indigo-950">
+                          <div className="flex items-center gap-1 font-semibold text-indigo-800 mb-0.5">
+                            <Sparkles className="w-3 h-3 text-indigo-600" />
+                            <span>Khớp nội dung (AI):</span>
+                          </div>
+                          <p className="line-clamp-3 text-slate-700 italic">&quot;{aiSnippet}&quot;</p>
+                        </div>
+                      )}
 
                       {/* 3. Đáy khung: Ngày tải lên hệ thống */}
                       <div className="px-3.5 py-2 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-[11px] text-slate-500">
