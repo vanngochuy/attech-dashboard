@@ -1033,8 +1033,8 @@ export default function EmailDocumentTasksPage() {
               </div>
               <div className="flex items-center gap-3 shrink-0 text-right">
                 <span className="w-32 text-left hidden sm:inline">SỐ/KÝ HIỆU</span>
-                <span className="w-40 text-left hidden md:inline">CƠ QUAN BAN HÀNH</span>
-                <span className="w-24 text-center hidden lg:inline">BAN HÀNH</span>
+                <span className="w-40 text-left hidden md:inline">ĐƠN VỊ BAN HÀNH</span>
+                <span className="w-28 text-center hidden lg:inline">NGÀY BAN HÀNH</span>
                 <span className="w-28 text-center hidden xl:inline">NGÀY EMAIL</span>
                 <span className="w-36 text-center">ĐỐI CHIẾU</span>
                 <span className="w-32 text-right">THAO TÁC</span>
@@ -1119,7 +1119,7 @@ export default function EmailDocumentTasksPage() {
                       {item.extractedIssuer || 'ATTECH'}
                     </span>
 
-                    <span className="w-24 text-center font-mono text-xs text-slate-600 hidden lg:inline">
+                    <span className="w-28 text-center font-mono text-xs text-slate-600 hidden lg:inline">
                       {item.extractedIssueDate ? formatToDMY(item.extractedIssueDate) : '---'}
                     </span>
 
@@ -1146,7 +1146,7 @@ export default function EmailDocumentTasksPage() {
                         title={
                           item.aiExtracted
                             ? 'AI đã đọc 2 trang đầu (Bấm để quét lại)'
-                            : 'Bấm để AI Gemini đọc 2 trang đầu trích xuất Số hiệu & Cơ quan ban hành'
+                            : 'Bấm để AI Gemini đọc 2 trang đầu trích xuất Số hiệu & Đơn vị ban hành'
                         }
                       >
                         {aiScanningId === item.id ? (
