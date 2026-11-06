@@ -66,6 +66,22 @@ async function slicePdfFirst2PagesForEmail(originalFile: File): Promise<File> {
   }
 }
 
+// Lấy link xem trước trực tiếp file PDF (Google Drive hoặc Supabase/Storage)
+function getDraftPreviewUrl(item: EmailDraftItem | null): string | null {
+  if (!item) return null;
+  if (item.driveFileId) {
+    return `https://drive.google.com/file/d/${item.driveFileId}/preview`;
+  }
+  if (item.fileUrl) {
+    const match = item.fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      return `https://drive.google.com/file/d/${match[1]}/preview`;
+    }
+    return item.fileUrl;
+  }
+  return null;
+}
+
 export default function EmailDocumentTasksPage() {
   const { isAdmin } = useAuth();
   const { isDeepAero } = useTheme();
@@ -109,6 +125,16 @@ export default function EmailDocumentTasksPage() {
 
   // Modal Xem trước file PDF
   const [previewItem, setPreviewItem] = useState<EmailDraftItem | null>(null);
+
+  // Đóng modal xem trước khi nhấn phím Escape
+  useEffect(() => {
+    if (!previewItem) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewItem(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewItem]);
 
   // Modal Thêm / Giả lập PDF lọc từ Email để AI đọc & đối chiếu với kho Tài liệu
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -1045,11 +1071,13 @@ export default function EmailDocumentTasksPage() {
             <div className="flex-1 overflow-y-auto divide-y divide-slate-100 min-h-0">
                 {paginatedDrafts.map((item, idx) => {
                   const isSelected = selectedIds.includes(item.id);
+                  const previewUrl = getDraftPreviewUrl(item);
+                  const hasPreview = !!previewUrl;
+
                   return (
                     <div
                       key={item.id}
-                      onClick={() => setCompareItem(item)}
-                      className={`py-2.5 px-4 flex items-center justify-between hover:bg-sky-50/50 transition-colors group cursor-pointer ${
+                      className={`py-2.5 px-4 flex items-center justify-between hover:bg-sky-50/50 transition-colors group ${
                         isSelected ? 'bg-sky-50/70 border-l-4 border-l-sky-500' : 'bg-white'
                       }`}
                     >
@@ -1086,8 +1114,18 @@ export default function EmailDocumentTasksPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <p
-                              className="text-xs font-semibold text-slate-900 group-hover:text-sky-700 truncate"
-                              title={item.extractedTitle}
+                              onClick={(e) => {
+                                if (hasPreview) {
+                                  e.stopPropagation();
+                                  setPreviewItem(item);
+                                }
+                              }}
+                              className={`text-xs font-semibold truncate ${
+                                hasPreview
+                                  ? 'text-slate-900 group-hover:text-sky-700 hover:underline cursor-pointer'
+                                  : 'text-slate-900 cursor-default'
+                              }`}
+                              title={hasPreview ? `Nhấn để xem trước file PDF: ${item.extractedTitle}` : item.extractedTitle}
                             >
                               {item.extractedTitle}
                             </p>
@@ -1164,11 +1202,11 @@ export default function EmailDocumentTasksPage() {
                         <GitCompareArrows className="w-3.5 h-3.5" />
                       </button>
 
-                      {item.fileUrl && (
+                      {hasPreview && (
                         <button
                           onClick={() => setPreviewItem(item)}
                           className="p-1.5 rounded hover:bg-indigo-50 text-indigo-600 transition-colors cursor-pointer"
-                          title="Xem file PDF đính kèm từ Email"
+                          title="Xem trước trực tiếp file PDF"
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
@@ -1346,6 +1384,18 @@ export default function EmailDocumentTasksPage() {
                       <strong>Thư mục lưu tạm:</strong>{' '}
                       <span className="font-mono text-amber-700">{compareItem.driveFolderName}</span>
                     </p>
+                    {getDraftPreviewUrl(compareItem) && (
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewItem(compareItem)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Xem trực tiếp file PDF này</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1591,49 +1641,61 @@ export default function EmailDocumentTasksPage() {
         </div>
       )}
 
-      {/* Modal Xem trước File PDF từ Email */}
-      {previewItem && previewItem.fileUrl && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4"
-          onClick={() => setPreviewItem(null)}
-        >
+      {/* Modal Xem trước File PDF (Trực tiếp từ Google Drive hoặc Supabase/Email) */}
+      {previewItem && (() => {
+        const previewUrl = getDraftPreviewUrl(previewItem);
+        if (!previewUrl) return null;
+
+        return (
           <div
-            className="bg-white border border-slate-200 rounded-2xl max-w-5xl w-full h-[88vh] flex flex-col overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+            onClick={() => setPreviewItem(null)}
           >
-            <div className="px-5 py-3 bg-[#1b3252] text-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <FileText className="w-4 h-4 text-sky-400 shrink-0" />
-                <span className="text-sm font-bold truncate">{previewItem.extractedTitle}</span>
+            <div
+              className="bg-white border border-slate-200 rounded-2xl max-w-5xl w-full h-[88vh] flex flex-col overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 py-3 bg-[#1b3252] text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <FileText className="w-4 h-4 text-sky-400 shrink-0" />
+                  <span className="text-sm font-bold truncate">{previewItem.extractedTitle}</span>
+                  {previewItem.driveFileId && (
+                    <span className="hidden sm:inline font-mono text-[10px] text-sky-200 bg-white/10 px-2 py-0.5 rounded border border-white/20">
+                      Drive ID: {previewItem.driveFileId}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Mở tab mới</span>
+                  </a>
+                  <button
+                    onClick={() => setPreviewItem(null)}
+                    className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 transition-colors cursor-pointer"
+                    title="Đóng (Esc)"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <a
-                  href={previewItem.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Mở tab mới</span>
-                </a>
-                <button
-                  onClick={() => setPreviewItem(null)}
-                  className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-300 hover:text-rose-300"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+              <div className="flex-1 bg-slate-900 relative">
+                <iframe
+                  src={previewUrl}
+                  className="w-full h-full border-none bg-white"
+                  title={previewItem.extractedTitle}
+                  allow="autoplay"
+                />
               </div>
-            </div>
-            <div className="flex-1 bg-slate-900">
-              <iframe
-                src={previewItem.fileUrl}
-                className="w-full h-full border-none bg-white"
-                title={previewItem.extractedTitle}
-              />
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
