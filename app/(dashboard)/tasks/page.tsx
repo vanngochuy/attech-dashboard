@@ -257,6 +257,10 @@ export default function EmailDocumentTasksPage() {
 
   // Bóc tách AI 2 trang đầu cho 1 văn bản cụ thể
   const handleScanSingleAi = async (item: EmailDraftItem) => {
+    if (item.aiExtracted) {
+      showToast('success', `Văn bản "${item.extractedTitle || item.pdfFileName}" đã được AI trích xuất trước đó.`);
+      return;
+    }
     setAiScanningId(item.id);
     try {
       const fd = new FormData();
@@ -289,6 +293,10 @@ export default function EmailDocumentTasksPage() {
       const metaData = await metaRes.json();
       if (Array.isArray(metaData.emailDrafts)) {
         setDrafts(metaData.emailDrafts);
+      } else if (metaData.updatedDraft) {
+        setDrafts((prev) =>
+          prev.map((d) => (d.id === item.id ? { ...d, ...metaData.updatedDraft } : d))
+        );
       }
 
       showToast(
@@ -323,12 +331,13 @@ export default function EmailDocumentTasksPage() {
 
     showToast(
       'success',
-      `Bắt đầu hàng đợi AI an toàn (${unScanned.length} văn bản, tốc độ 12 file/phút để tuân thủ Gemini Free Tier)...`
+      `Bắt đầu hàng đợi AI an toàn (${unScanned.length} văn bản chưa quét, tốc độ 12 file/phút để tuân thủ Gemini Free Tier)...`
     );
 
     let count = 0;
     for (const item of unScanned) {
       if (queueStopRef.current) break;
+      if (item.aiExtracted) continue;
       count++;
       setQueueProgress({ current: count, total: unScanned.length });
 
@@ -551,19 +560,25 @@ export default function EmailDocumentTasksPage() {
       return;
     }
 
-    const targetItems = drafts.filter((d) => selectedIds.includes(d.id));
+    const targetItems = drafts.filter((d) => selectedIds.includes(d.id) && !d.aiExtracted);
+    if (targetItems.length === 0) {
+      showToast('success', 'Tất cả các văn bản đã chọn đều đã được AI trích xuất hoàn tất.');
+      return;
+    }
+
     setIsBatchAiRunning(true);
     batchAiStopRef.current = false;
     setBatchAiProgress({ current: 0, total: targetItems.length });
 
     showToast(
       'success',
-      `Bắt đầu đọc AI 2 trang cho ${targetItems.length} văn bản đã chọn (tốc độ an toàn để không vượt quota)...`
+      `Bắt đầu đọc AI 2 trang cho ${targetItems.length} văn bản đã chọn (bỏ qua các file đã quét)...`
     );
 
     let count = 0;
     for (const item of targetItems) {
       if (batchAiStopRef.current) break;
+      if (item.aiExtracted) continue;
       count++;
       setBatchAiProgress({ current: count, total: targetItems.length });
       try {
@@ -1052,16 +1067,36 @@ export default function EmailDocumentTasksPage() {
                         Bỏ chọn
                       </button>
                       {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={handleBatchDelete}
-                          disabled={isSaving}
-                          className="flex items-center gap-1 px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-bold shadow-2xs transition-all cursor-pointer"
-                          title="Xóa các văn bản đã chọn"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          <span>Xóa ({selectedIds.length})</span>
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleBatchAiScan}
+                            disabled={isBatchAiRunning}
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold shadow-2xs transition-all cursor-pointer ${
+                              isBatchAiRunning
+                                ? 'bg-amber-600 hover:bg-amber-700 text-white animate-pulse'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            }`}
+                            title="Chỉ đọc AI cho các văn bản chưa được quét trong danh sách chọn"
+                          >
+                            <Sparkles className="w-3 h-3 text-amber-200" />
+                            <span>
+                              {isBatchAiRunning
+                                ? `Đang đọc (${batchAiProgress?.current}/${batchAiProgress?.total})`
+                                : `Quét AI (${drafts.filter((d) => selectedIds.includes(d.id) && !d.aiExtracted).length})`}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleBatchDelete}
+                            disabled={isSaving}
+                            className="flex items-center gap-1 px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-bold shadow-2xs transition-all cursor-pointer"
+                            title="Xóa các văn bản đã chọn"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Xóa ({selectedIds.length})</span>
+                          </button>
+                        </>
                       )}
                     </div>
                   )}
@@ -1201,21 +1236,23 @@ export default function EmailDocumentTasksPage() {
                     >
                       {/* Nút AI Quét 2 trang đầu */}
                       <button
-                        onClick={() => handleScanSingleAi(item)}
-                        disabled={aiScanningId === item.id}
-                        className={`p-1.5 rounded transition-colors cursor-pointer ${
+                        onClick={() => !item.aiExtracted && handleScanSingleAi(item)}
+                        disabled={aiScanningId === item.id || !!item.aiExtracted}
+                        className={`p-1.5 rounded transition-colors ${
                           item.aiExtracted
-                            ? 'hover:bg-emerald-50 text-emerald-600'
-                            : 'hover:bg-amber-50 text-amber-600'
+                            ? 'text-emerald-600 bg-emerald-50/70 cursor-default opacity-90'
+                            : 'hover:bg-amber-50 text-amber-600 cursor-pointer'
                         }`}
                         title={
                           item.aiExtracted
-                            ? 'AI đã đọc 2 trang đầu (Bấm để quét lại)'
+                            ? 'AI đã trích xuất hoàn tất (Không quét lại)'
                             : 'Bấm để AI Gemini đọc 2 trang đầu trích xuất Số hiệu & Đơn vị ban hành'
                         }
                       >
                         {aiScanningId === item.id ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" />
+                        ) : item.aiExtracted ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         ) : (
                           <Sparkles className="w-3.5 h-3.5" />
                         )}

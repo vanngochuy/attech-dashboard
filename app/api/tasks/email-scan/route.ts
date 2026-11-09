@@ -311,12 +311,13 @@ export async function POST(req: Request) {
             const n8nData = await n8nRes.json();
             if (Array.isArray(n8nData.items)) {
               for (const item of n8nData.items) {
-                const exists = currentDrafts.some(
+                const itemNorm = (item.pdfFileName || '').toLowerCase().trim();
+                const existingIndex = currentDrafts.findIndex(
                   (d) =>
                     (item.driveFileId && d.driveFileId === item.driveFileId) ||
-                    d.pdfFileName === item.pdfFileName
+                    (d.pdfFileName || '').toLowerCase().trim() === itemNorm
                 );
-                if (!exists) {
+                if (existingIndex === -1) {
                   const heuristic = heuristicExtractFromText(item.pdfFileName, item.emailSubject);
                   currentDrafts.unshift({
                     id: `edraft-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -337,6 +338,16 @@ export async function POST(req: Request) {
                     aiExtracted: false,
                   });
                   n8nFetchedCount++;
+                } else {
+                  // Đã tồn tại: Giữ nguyên 100% dữ liệu do AI đã đọc nếu có
+                  const exist = currentDrafts[existingIndex];
+                  currentDrafts[existingIndex] = {
+                    ...exist,
+                    driveFileId: exist.driveFileId || item.driveFileId,
+                    fileUrl: exist.fileUrl || item.fileUrl,
+                    receivedDate: exist.receivedDate || item.receivedDate || '',
+                    emailSubject: exist.emailSubject || item.emailSubject,
+                  };
                 }
               }
             }
@@ -454,12 +465,24 @@ export async function POST(req: Request) {
 
       for (const item of body.items) {
         if (!item?.pdfFileName) continue;
-        const exists = updated.some(
+        const itemNorm = (item.pdfFileName || '').toLowerCase().trim();
+        const existingIndex = updated.findIndex(
           (d) =>
             (item.driveFileId && d.driveFileId === item.driveFileId) ||
-            (d.pdfFileName === item.pdfFileName && d.receivedDate === item.receivedDate)
+            (d.pdfFileName || '').toLowerCase().trim() === itemNorm
         );
-        if (exists) continue;
+        if (existingIndex !== -1) {
+          // Đã tồn tại: giữ nguyên 100% dữ liệu AI
+          const exist = updated[existingIndex];
+          updated[existingIndex] = {
+            ...exist,
+            driveFileId: exist.driveFileId || item.driveFileId,
+            fileUrl: exist.fileUrl || item.fileUrl,
+            receivedDate: exist.receivedDate || item.receivedDate || '',
+            emailSubject: exist.emailSubject || item.emailSubject,
+          };
+          continue;
+        }
 
         const title = item.extractedTitle || item.pdfFileName;
         const comp = matchAgainstOfficialDocuments(officialDocs, title, item.extractedCode);
@@ -557,6 +580,17 @@ export async function POST(req: Request) {
       }
 
       const target = currentDrafts[draftIndex];
+
+      // Nếu văn bản đã được AI trích xuất trước đó và không có cờ force -> giữ nguyên, không ghi đè lại
+      if (target.aiExtracted && !body.force) {
+        return NextResponse.json({
+          success: true,
+          message: 'Văn bản đã được AI xử lý trước đó',
+          updatedDraft: target,
+          emailDrafts: currentDrafts,
+        });
+      }
+
       const m = body.metadata || {};
       const newTitle = m.title || target.extractedTitle;
       const newCode = m.document_code || target.extractedCode || '';
@@ -565,7 +599,7 @@ export async function POST(req: Request) {
       const newScope = m.scope_domain || target.scopeDomain || 'QL_KY_THUAT';
 
       const comp = matchAgainstOfficialDocuments(officialDocs, newTitle, newCode);
-      currentDrafts[draftIndex] = {
+      const updatedItem = {
         ...target,
         extractedTitle: newTitle,
         extractedCode: newCode,
@@ -579,6 +613,7 @@ export async function POST(req: Request) {
         comparisonSummary: comp.comparisonSummary,
         updatedAt: new Date().toISOString(),
       };
+      currentDrafts[draftIndex] = updatedItem;
 
       const sortedCurrent = sortDraftsByReceivedDate(currentDrafts, 'desc');
 
@@ -594,7 +629,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        updatedDraft: target,
+        updatedDraft: updatedItem,
         emailDrafts: sortedCurrent,
       });
     }
