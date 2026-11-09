@@ -197,6 +197,10 @@ function DocumentsContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [filterMissingOnly, setFilterMissingOnly] = useState(false);
+  const [filterIncompleteOnly, setFilterIncompleteOnly] = useState(false);
+  const [isScanningAiDocId, setIsScanningAiDocId] = useState<string | null>(null);
+  const [isBatchScanningAi, setIsBatchScanningAi] = useState(false);
+  const [batchScanProgress, setBatchScanProgress] = useState<{ current: number; total: number } | null>(null);
   const [isDbConfigured, setIsDbConfigured] = useState(true);
 
   // Trạng thái Tìm kiếm ngữ nghĩa bằng AI (Tìm AI)
@@ -419,6 +423,9 @@ function DocumentsContent() {
         const matchesMissing = filterMissingOnly ? doc.sync_status === 'missing_on_drive' : true;
         if (!matchesMissing) return false;
 
+        const matchesIncomplete = filterIncompleteOnly ? isDocMissingMeta(doc) : true;
+        if (!matchesIncomplete) return false;
+
         const matchesStatus =
           statusFilter === 'ALL'
             ? true
@@ -454,9 +461,12 @@ function DocumentsContent() {
       const docYear = doc.issue_date ? String(new Date(doc.issue_date).getFullYear()) : '';
       if (yearFilter !== 'ALL' && docYear !== yearFilter) return false;
 
-      // 4. Lọc theo Trạng thái mất file & Hiệu lực
+      // 4. Lọc theo Trạng thái mất file & Hiệu lực & Chưa đủ metadata
       const matchesMissing = filterMissingOnly ? doc.sync_status === 'missing_on_drive' : true;
       if (!matchesMissing) return false;
+
+      const matchesIncomplete = filterIncompleteOnly ? isDocMissingMeta(doc) : true;
+      if (!matchesIncomplete) return false;
 
       const matchesStatus =
         statusFilter === 'ALL'
@@ -517,6 +527,116 @@ function DocumentsContent() {
   const missingDriveCount = useMemo(() => {
     return documents.filter((doc) => doc.sync_status === 'missing_on_drive').length;
   }, [documents]);
+
+  // Kiểm tra tài liệu có bị thiếu metadata cốt lõi hay không (Số hiệu, Cơ quan ban hành, Ngày ban hành)
+  const isDocMissingMeta = useCallback((doc: any) => {
+    const code = (doc.document_code || '').trim();
+    const issuer = (doc.issuing_authority || '').trim();
+    const date = doc.issue_date;
+    return !code || !issuer || !date;
+  }, []);
+
+  // Đếm số lượng file chưa hiển đủ metadata
+  const incompleteMetaCount = useMemo(() => {
+    return documents.filter(isDocMissingMeta).length;
+  }, [documents, isDocMissingMeta]);
+
+  // Hàm Quét AI 2 trang đầu cho 1 tài liệu đơn lẻ (Dành cho Admin)
+  const handleScanSingleDocAi = async (doc: any) => {
+    if (isScanningAiDocId || isBatchScanningAi) return;
+    setIsScanningAiDocId(doc.id);
+    setScanNotification(null);
+
+    try {
+      const res = await fetch('/api/documents/scan-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doc_id: doc.id }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Lỗi quét AI trích xuất metadata');
+      }
+
+      // Cập nhật state documents tức thì
+      if (data.metadata) {
+        setDocuments((prev) =>
+          prev.map((d) => (d.id === doc.id ? { ...d, ...data.metadata } : d))
+        );
+      }
+
+      setScanNotification({
+        type: 'success',
+        text: `Quét AI (2 trang đầu) thành công: Số hiệu [${data.metadata?.document_code || 'Không có'}], Cơ quan [${data.metadata?.issuing_authority || 'Không có'}], Ngày [${data.metadata?.issue_date || 'Chưa rõ'}].`,
+      });
+    } catch (err: any) {
+      console.error('Lỗi quét AI tài liệu:', err);
+      setScanNotification({
+        type: 'error',
+        text: `Lỗi quét AI "${doc.file_name}": ${err.message || 'Không thể kết nối máy chủ'}`,
+      });
+    } finally {
+      setIsScanningAiDocId(null);
+      setTimeout(() => {
+        setScanNotification(null);
+      }, 7000);
+    }
+  };
+
+  // Hàm Quét AI hàng loạt cho các tài liệu chưa đủ metadata (Dành cho Admin)
+  const handleBatchScanIncompleteAi = async () => {
+    if (isBatchScanningAi || isScanningAiDocId) return;
+    const targetDocs = documents.filter(isDocMissingMeta);
+    if (targetDocs.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Hệ thống phát hiện ${targetDocs.length} tài liệu chưa hiển thị đủ metadata.\nBạn có muốn tự động quét AI (cấu hình 2 trang đầu) để trích xuất và bổ sung Số hiệu, Đơn vị và Ngày ban hành không?`
+    );
+    if (!confirmed) return;
+
+    setIsBatchScanningAi(true);
+    setBatchScanProgress({ current: 0, total: targetDocs.length });
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < targetDocs.length; i++) {
+      const doc = targetDocs[i];
+      setBatchScanProgress({ current: i + 1, total: targetDocs.length });
+      setIsScanningAiDocId(doc.id);
+
+      try {
+        const res = await fetch('/api/documents/scan-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ doc_id: doc.id }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success && data.metadata) {
+          successCount++;
+          setDocuments((prev) =>
+            prev.map((d) => (d.id === doc.id ? { ...d, ...data.metadata } : d))
+          );
+        } else {
+          failCount++;
+        }
+      } catch (err) {
+        failCount++;
+        console.error(`Lỗi quét AI "${doc.file_name}":`, err);
+      }
+    }
+
+    setIsScanningAiDocId(null);
+    setIsBatchScanningAi(false);
+    setBatchScanProgress(null);
+    setScanNotification({
+      type: successCount > 0 ? 'success' : 'error',
+      text: `Hoàn tất quét AI tự động: Thành công ${successCount}/${targetDocs.length} tài liệu${failCount > 0 ? `, thất bại ${failCount}` : ''}.`,
+    });
+    setTimeout(() => {
+      setScanNotification(null);
+    }, 7000);
+  };
 
   const activeDept = DEPARTMENTS.find((d) => d.id === activeFilter) || DEPARTMENTS[0];
 
@@ -836,6 +956,51 @@ function DocumentsContent() {
         </div>
       )}
 
+      {/* Banner Hỗ trợ Quét AI xử lý file chưa đủ metadata (Chỉ hiển thị cho Admin) */}
+      {isAdmin && incompleteMetaCount > 0 && (
+        <div className="mx-6 mt-3 p-3 rounded-xl bg-purple-50/90 border border-purple-200 flex flex-wrap items-center justify-between gap-2.5 text-xs text-purple-950 shrink-0 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="p-1 rounded-lg bg-purple-100 text-purple-700 border border-purple-200">
+              <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+            </span>
+            <span>
+              <strong>Quét AI trích xuất (2 trang đầu):</strong> Phát hiện{' '}
+              <strong className="text-purple-900 underline">{incompleteMetaCount} tài liệu</strong> chưa hiển thị đủ metadata (Số hiệu, Đơn vị hoặc Ngày ban hành).
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setFilterIncompleteOnly(!filterIncompleteOnly)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                filterIncompleteOnly
+                  ? 'bg-purple-700 text-white border-purple-800 shadow-2xs'
+                  : 'bg-white hover:bg-purple-100 text-purple-900 border-purple-300'
+              }`}
+            >
+              {filterIncompleteOnly ? 'Hiện tất cả' : 'Lọc file thiếu'}
+            </button>
+            <button
+              onClick={handleBatchScanIncompleteAi}
+              disabled={isBatchScanningAi || isScanningAiDocId !== null}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              title="Tự động quét AI (cấu hình 2 trang đầu) để bổ sung metadata cho toàn bộ file thiếu"
+            >
+              {isBatchScanningAi ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Đang quét AI ({batchScanProgress?.current}/{batchScanProgress?.total})...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Quét AI tự động ({incompleteMetaCount} file)</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Thanh Tìm kiếm & Lọc Đa Trường (Cố định phía trên danh sách) */}
       {!isLoading && isDbConfigured && (
         <div className="px-6 py-2.5 bg-white border-b border-slate-200 shadow-2xs shrink-0 z-20 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
@@ -854,7 +1019,8 @@ function DocumentsContent() {
               yearFilter !== 'ALL' ||
               statusFilter !== 'ALL' ||
               searchQuery.trim() !== '' ||
-              filterMissingOnly) && (
+              filterMissingOnly ||
+              filterIncompleteOnly) && (
               <button
                 type="button"
                 onClick={() => {
@@ -864,6 +1030,7 @@ function DocumentsContent() {
                   setStatusFilter('ALL');
                   setSearchQuery('');
                   setFilterMissingOnly(false);
+                  setFilterIncompleteOnly(false);
                 }}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
                 title="Xóa toàn bộ điều kiện tìm kiếm và bộ lọc"
@@ -1144,6 +1311,7 @@ function DocumentsContent() {
                     setStatusFilter('ALL');
                     setSearchQuery('');
                     setFilterMissingOnly(false);
+                    setFilterIncompleteOnly(false);
                   }}
                   className="px-3.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium border border-slate-200 shadow-xs transition-colors"
                 >
@@ -1165,7 +1333,7 @@ function DocumentsContent() {
                       <span className="w-28 text-center">NGÀY BAN HÀNH</span>
                       <span className="w-32 text-center hidden lg:inline">CHUYÊN MÔN</span>
                       <span className="w-28 text-center">HIỆU LỰC</span>
-                      <span className="w-10 text-center"></span>
+                      <span className={`${isAdmin ? 'w-20' : 'w-10'} text-center`}></span>
                     </div>
                   </div>
 
@@ -1376,11 +1544,40 @@ function DocumentsContent() {
                               )}
                             </span>
 
-                            {/* Cột Chatbot AI duy nhất ở cuối (Đã bỏ con mắt, bỏ sửa, bỏ drive, bỏ chữ THAO TÁC) */}
+                            {/* Cột Thao tác: Quét AI (Chỉ Admin) & Chatbot AI ở cuối */}
                             <div
-                              className="w-10 flex items-center justify-center shrink-0"
+                              className={`${isAdmin ? 'w-20' : 'w-10'} flex items-center justify-end gap-1 shrink-0`}
                               onClick={(e) => e.stopPropagation()}
                             >
+                              {/* Nút Quét AI (Chỉ Admin mới nhìn thấy và sử dụng) đặt TRƯỚC icon Chatbot */}
+                              {isAdmin && (
+                                <button
+                                  onClick={() => handleScanSingleDocAi(doc)}
+                                  disabled={isScanningAiDocId === doc.id || isBatchScanningAi}
+                                  className={`p-1.5 rounded-lg transition-all cursor-pointer relative ${
+                                    isDocMissingMeta(doc)
+                                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-300 shadow-2xs hover:shadow-xs'
+                                      : 'hover:bg-purple-50 text-purple-600 hover:text-purple-700'
+                                  } disabled:opacity-50`}
+                                  title={
+                                    isDocMissingMeta(doc)
+                                      ? 'Tài liệu chưa đủ metadata: Nhấn để AI quét 2 trang đầu trích xuất Số hiệu, Đơn vị, Ngày'
+                                      : 'Quét AI (2 trang đầu) để cập nhật lại metadata'
+                                  }
+                                >
+                                  {isScanningAiDocId === doc.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                                  ) : (
+                                    <>
+                                      <Sparkles className="w-4 h-4" />
+                                      {isDocMissingMeta(doc) && (
+                                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white animate-pulse" />
+                                      )}
+                                    </>
+                                  )}
+                                </button>
+                              )}
+
                               <button
                                 data-assistant-trigger="true"
                                 onClick={() => selectAndAskDoc(doc.id)}
@@ -1467,11 +1664,40 @@ function DocumentsContent() {
                           </div>
                         </div>
 
-                        {/* Quick action: Chỉ để icon Bot duy nhất */}
+                        {/* Quick action: Icon Quét AI (Chỉ Admin) + Icon Bot */}
                         <div
-                          className="flex items-center gap-0.5 shrink-0"
+                          className="flex items-center gap-1 shrink-0"
                           onClick={(e) => e.stopPropagation()}
                         >
+                          {/* Nút Quét AI (Chỉ Admin mới nhìn thấy và sử dụng) đặt TRƯỚC icon Chatbot */}
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleScanSingleDocAi(doc)}
+                              disabled={isScanningAiDocId === doc.id || isBatchScanningAi}
+                              className={`p-1.5 rounded-lg transition-all cursor-pointer relative ${
+                                isDocMissingMeta(doc)
+                                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-300 shadow-2xs hover:shadow-xs'
+                                  : 'hover:bg-purple-50 text-purple-600 hover:text-purple-700'
+                              } disabled:opacity-50`}
+                              title={
+                                isDocMissingMeta(doc)
+                                  ? 'Tài liệu chưa đủ metadata: Nhấn để AI quét 2 trang đầu trích xuất Số hiệu, Đơn vị, Ngày'
+                                  : 'Quét AI (2 trang đầu) để cập nhật lại metadata'
+                              }
+                            >
+                              {isScanningAiDocId === doc.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                              ) : (
+                                <>
+                                  <Sparkles className="w-4 h-4" />
+                                  {isDocMissingMeta(doc) && (
+                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white animate-pulse" />
+                                  )}
+                                </>
+                              )}
+                            </button>
+                          )}
+
                           <button
                             data-assistant-trigger="true"
                             onClick={() => selectAndAskDoc(doc.id)}

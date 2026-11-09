@@ -28,6 +28,8 @@ import {
   Building,
   Play,
   Pause,
+  ArrowDown,
+  ArrowUp,
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 import { useAuth } from '@/components/auth-context';
@@ -38,6 +40,9 @@ import {
   EmailDraftItem,
   DEFAULT_EMAIL_DRAFTS,
   formatToDMY,
+  formatToDMYTime,
+  parseReceivedTimestamp,
+  sortDraftsByReceivedDate,
 } from '@/lib/compliance';
 
 // Cắt tối đa 2 trang đầu của file PDF để AI Gemini trích xuất siêu tốc
@@ -105,6 +110,8 @@ export default function EmailDocumentTasksPage() {
   // Phân trang (Pagination) để bảng hiển thị vừa vặn trong màn hình
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(15);
+  // Sắp xếp theo ngày nhận email: Mặc định 'desc' để email mới nhất luôn ở trên cùng Page 1
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   // Trạng thái AI quét 2 trang cho từng file
   const [aiScanningId, setAiScanningId] = useState<string | null>(null);
@@ -165,7 +172,7 @@ export default function EmailDocumentTasksPage() {
       const res = await fetch('/api/compliance?type=email_drafts', { cache: 'no-store' });
       const data = await res.json();
       if (Array.isArray(data.emailDrafts)) {
-        setDrafts(data.emailDrafts);
+        setDrafts(sortDraftsByReceivedDate(data.emailDrafts, 'desc'));
       }
     } catch (err) {
       console.error('Lỗi tải danh sách văn bản email:', err);
@@ -195,7 +202,7 @@ export default function EmailDocumentTasksPage() {
       if (!res.ok) throw new Error(data.error || 'Quét email thất bại');
 
       if (Array.isArray(data.emailDrafts)) {
-        setDrafts(data.emailDrafts);
+        setDrafts(sortDraftsByReceivedDate(data.emailDrafts, 'desc'));
       }
 
       const updateCount = (data.emailDrafts || []).filter(
@@ -229,7 +236,7 @@ export default function EmailDocumentTasksPage() {
       if (!res.ok) throw new Error(data.error || 'Quét và đồng bộ thất bại');
 
       if (Array.isArray(data.emailDrafts)) {
-        setDrafts(data.emailDrafts);
+        setDrafts(sortDraftsByReceivedDate(data.emailDrafts, 'desc'));
       }
       setIsAllTime(true);
 
@@ -438,7 +445,7 @@ export default function EmailDocumentTasksPage() {
       if (!res.ok) throw new Error(data.error || 'Không thể lưu và đối chiếu');
 
       if (Array.isArray(data.emailDrafts)) {
-        setDrafts(data.emailDrafts);
+        setDrafts(sortDraftsByReceivedDate(data.emailDrafts, 'desc'));
       }
       setIsAddModalOpen(false);
 
@@ -482,7 +489,7 @@ export default function EmailDocumentTasksPage() {
       if (!res.ok) throw new Error(data.error || 'Không thể duyệt ban hành');
 
       if (Array.isArray(data.emailDrafts)) {
-        setDrafts(data.emailDrafts);
+        setDrafts(sortDraftsByReceivedDate(data.emailDrafts, 'desc'));
       }
       setCompareItem(null);
       showToast('success', 'Đã chuyển sang tab Tài liệu chính thức và cập nhật phiên bản cũ!');
@@ -577,7 +584,7 @@ export default function EmailDocumentTasksPage() {
 
   const filteredDrafts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return drafts.filter((item) => {
+    const filtered = drafts.filter((item) => {
       if (matchFilter === 'UPDATE_CANDIDATE' && item.matchType !== 'UPDATE_CANDIDATE' && item.matchType !== 'EXACT_DUPLICATE') {
         return false;
       }
@@ -601,12 +608,15 @@ export default function EmailDocumentTasksPage() {
         (item.matchedOfficialDoc?.code || '').toLowerCase().includes(q)
       );
     });
-  }, [drafts, searchQuery, matchFilter, fromDate, toDate, isAllTime]);
 
-  // Tự động reset về trang 1 khi thay đổi bộ lọc tìm kiếm hoặc kích thước trang
+    // Sắp xếp ưu tiên theo ngày nhận email: email mới nhất luôn hiển thị trên cùng page 1
+    return sortDraftsByReceivedDate(filtered, sortOrder);
+  }, [drafts, searchQuery, matchFilter, fromDate, toDate, isAllTime, sortOrder]);
+
+  // Tự động reset về trang 1 khi thay đổi bộ lọc tìm kiếm hoặc kích thước trang hoặc chiều sắp xếp
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, matchFilter, fromDate, toDate, isAllTime, pageSize]);
+  }, [searchQuery, matchFilter, fromDate, toDate, isAllTime, pageSize, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(filteredDrafts.length / pageSize));
   const paginatedDrafts = useMemo(() => {
@@ -1061,7 +1071,19 @@ export default function EmailDocumentTasksPage() {
                 <span className="w-32 text-left hidden sm:inline">SỐ/KÝ HIỆU</span>
                 <span className="w-40 text-left hidden md:inline">ĐƠN VỊ BAN HÀNH</span>
                 <span className="w-28 text-center hidden lg:inline">NGÀY BAN HÀNH</span>
-                <span className="w-28 text-center hidden xl:inline">NGÀY EMAIL</span>
+                <button
+                  type="button"
+                  onClick={() => setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+                  className="w-36 text-center hidden xl:inline-flex items-center justify-center gap-1 hover:text-sky-700 transition-colors cursor-pointer select-none group"
+                  title="Sắp xếp theo ngày nhận email (Mặc định: Email mới nhất ở trên cùng page 1)"
+                >
+                  <span className="font-bold">NGÀY EMAIL</span>
+                  {sortOrder === 'desc' ? (
+                    <ArrowDown className="w-3.5 h-3.5 text-sky-600 group-hover:scale-110 transition-transform" />
+                  ) : (
+                    <ArrowUp className="w-3.5 h-3.5 text-sky-600 group-hover:scale-110 transition-transform" />
+                  )}
+                </button>
                 <span className="w-36 text-center">ĐỐI CHIẾU</span>
                 <span className="w-32 text-right">THAO TÁC</span>
               </div>
@@ -1161,8 +1183,13 @@ export default function EmailDocumentTasksPage() {
                       {item.extractedIssueDate ? formatToDMY(item.extractedIssueDate) : '---'}
                     </span>
 
-                    <span className="w-28 text-center font-mono text-xs text-slate-500 hidden xl:inline" title={`Email nhận: ${item.receivedDate}`}>
-                      {item.receivedDate.slice(0, 16)}
+                    <span
+                      className={`w-36 text-center font-mono text-xs hidden xl:inline ${
+                        item.receivedDate ? 'text-slate-600 font-semibold' : 'text-slate-300'
+                      }`}
+                      title={item.receivedDate ? `Email nhận: ${formatToDMYTime(item.receivedDate)}` : 'Văn bản đồng bộ từ Google Drive (Không qua email)'}
+                    >
+                      {item.receivedDate ? formatToDMYTime(item.receivedDate) : '---'}
                     </span>
 
                     <div className="w-36 text-center">{renderMatchBadge(item)}</div>
@@ -1363,7 +1390,7 @@ export default function EmailDocumentTasksPage() {
                       1. Bản PDF từ Email (Chưa chính thức)
                     </span>
                     <span className="font-mono text-[11px] text-sky-700">
-                      {compareItem.receivedDate}
+                      {compareItem.receivedDate ? formatToDMYTime(compareItem.receivedDate) : 'Đồng bộ từ Drive'}
                     </span>
                   </div>
                   <p className="font-bold text-slate-900 text-sm">{compareItem.extractedTitle}</p>

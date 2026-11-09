@@ -4,6 +4,7 @@ import {
   DEFAULT_EMAIL_DRAFTS,
   EmailDraftItem,
   EmailDraftMatchType,
+  sortDraftsByReceivedDate,
 } from '@/lib/compliance';
 
 export const dynamic = 'force-dynamic';
@@ -221,7 +222,7 @@ export async function POST(req: Request) {
         const { data } = await supabase.storage.from(BUCKET_NAME).download(EMAIL_DRAFTS_PATH);
         if (data) {
           const parsed = JSON.parse(await data.text());
-          if (Array.isArray(parsed)) currentDrafts = parsed;
+          if (Array.isArray(parsed)) currentDrafts = sortDraftsByReceivedDate(parsed, 'desc');
         }
       } catch {
         // Ignore and use fallback
@@ -251,7 +252,7 @@ export async function POST(req: Request) {
         id: `edraft-${Date.now()}`,
         emailSubject: draftItem.emailSubject || `Email đính kèm: ${draftItem.pdfFileName}`,
         senderEmail: draftItem.senderEmail || 'vanthu@attech.com.vn',
-        receivedDate: draftItem.receivedDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
+        receivedDate: draftItem.receivedDate || '',
         pdfFileName: draftItem.pdfFileName,
         extractedTitle: draftItem.extractedTitle || draftItem.pdfFileName,
         extractedCode: draftItem.extractedCode || '',
@@ -267,7 +268,7 @@ export async function POST(req: Request) {
         updatedAt: new Date().toISOString(),
       };
 
-      const updated = [newDraft, ...currentDrafts];
+      const updated = sortDraftsByReceivedDate([newDraft, ...currentDrafts], 'desc');
       if (supabase) {
         const blob = new Blob([JSON.stringify(updated, null, 2)], { type: 'application/json' });
         await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
@@ -321,8 +322,7 @@ export async function POST(req: Request) {
                     id: `edraft-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                     emailSubject: item.emailSubject || item.pdfFileName,
                     senderEmail: item.senderEmail || 'tuh@attech.com.vn',
-                    receivedDate:
-                      item.receivedDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
+                    receivedDate: item.receivedDate || '',
                     pdfFileName: item.pdfFileName,
                     extractedTitle:
                       item.extractedTitle || heuristic.title,
@@ -368,8 +368,10 @@ export async function POST(req: Request) {
         });
       }
 
+      const sortedDrafts = sortDraftsByReceivedDate(reEvaluatedDrafts, 'desc');
+
       if (supabase) {
-        const blob = new Blob([JSON.stringify(reEvaluatedDrafts, null, 2)], {
+        const blob = new Blob([JSON.stringify(sortedDrafts, null, 2)], {
           type: 'application/json',
         });
         await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
@@ -381,7 +383,7 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true,
         n8nFetchedCount,
-        emailDrafts: reEvaluatedDrafts,
+        emailDrafts: sortedDrafts,
       });
     }
 
@@ -466,8 +468,7 @@ export async function POST(req: Request) {
           id: `edraft-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           emailSubject: item.emailSubject || item.pdfFileName,
           senderEmail: item.senderEmail || body.mailbox || 'tuh@attech.com.vn',
-          receivedDate:
-            item.receivedDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
+          receivedDate: item.receivedDate || '',
           pdfFileName: item.pdfFileName,
           extractedTitle: title,
           extractedCode: item.extractedCode || '',
@@ -486,15 +487,17 @@ export async function POST(req: Request) {
         importedCount++;
       }
 
+      const sortedUpdated = sortDraftsByReceivedDate(updated, 'desc');
+
       if (supabase && importedCount > 0) {
-        const blob = new Blob([JSON.stringify(updated, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify(sortedUpdated, null, 2)], { type: 'application/json' });
         await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
           contentType: 'application/json',
           upsert: true,
         });
       }
 
-      return NextResponse.json({ success: true, importedCount, emailDrafts: updated });
+      return NextResponse.json({ success: true, importedCount, emailDrafts: sortedUpdated });
     }
 
     // 5. Hành động: Làm giàu siêu tốc (0ms, 0đ) toàn bộ số hiệu, đơn vị ban hành từ Heuristic Regex tiếng Việt
@@ -529,8 +532,10 @@ export async function POST(req: Request) {
         });
       }
 
+      const sortedReEvaluated = sortDraftsByReceivedDate(reEvaluated, 'desc');
+
       if (supabase) {
-        const blob = new Blob([JSON.stringify(reEvaluated, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify(sortedReEvaluated, null, 2)], { type: 'application/json' });
         await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
           contentType: 'application/json',
           upsert: true,
@@ -540,7 +545,7 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true,
         enrichedCount,
-        emailDrafts: reEvaluated,
+        emailDrafts: sortedReEvaluated,
       });
     }
 
@@ -575,8 +580,10 @@ export async function POST(req: Request) {
         updatedAt: new Date().toISOString(),
       };
 
+      const sortedCurrent = sortDraftsByReceivedDate(currentDrafts, 'desc');
+
       if (supabase) {
-        const blob = new Blob([JSON.stringify(currentDrafts, null, 2)], {
+        const blob = new Blob([JSON.stringify(sortedCurrent, null, 2)], {
           type: 'application/json',
         });
         await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
@@ -587,8 +594,8 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        updatedDraft: currentDrafts[draftIndex],
-        emailDrafts: currentDrafts,
+        updatedDraft: target,
+        emailDrafts: sortedCurrent,
       });
     }
 

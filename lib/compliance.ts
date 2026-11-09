@@ -119,6 +119,41 @@ export function formatToDMY(dateStr: string | undefined | null): string {
 }
 
 /**
+ * Chuyển đổi 'YYYY-MM-DD HH:mm' hoặc ISO sang 'dd/mm/yyyy thời gian' (DD/MM/YYYY HH:mm)
+ */
+export function formatToDMYTime(dateStr: string | undefined | null): string {
+  if (!dateStr) return '---';
+  const trimmed = dateStr.trim();
+  if (!trimmed || trimmed === '---') return '---';
+
+  // Định dạng YYYY-MM-DD HH:mm(:ss) hoặc YYYY-MM-DDTHH:mm(:ss)
+  const ymdMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (ymdMatch) {
+    const day = ymdMatch[3].padStart(2, '0');
+    const month = ymdMatch[2].padStart(2, '0');
+    const year = ymdMatch[1];
+    const timePart = ymdMatch[4] && ymdMatch[5]
+      ? ` ${ymdMatch[4].padStart(2, '0')}:${ymdMatch[5].padStart(2, '0')}`
+      : '';
+    return `${day}/${month}/${year}${timePart}`;
+  }
+
+  // Định dạng DD/MM/YYYY HH:mm
+  const dmyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    const timePart = dmyMatch[4] && dmyMatch[5]
+      ? ` ${dmyMatch[4].padStart(2, '0')}:${dmyMatch[5].padStart(2, '0')}`
+      : '';
+    return `${day}/${month}/${year}${timePart}`;
+  }
+
+  return trimmed;
+}
+
+/**
  * Chuyển đổi 'DD/MM/YYYY' sang 'YYYY-MM-DD' cho thẻ <input type="date">
  */
 export function formatToYMD(dateStr: string | undefined | null): string {
@@ -131,6 +166,62 @@ export function formatToYMD(dateStr: string | undefined | null): string {
   const ymdMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (ymdMatch) return trimmed;
   return '';
+}
+
+/**
+ * Chuyển đổi ngày/giờ nhận email thành timestamp (miligiây) để sắp xếp chính xác
+ * Hỗ trợ đa dạng định dạng: 'YYYY-MM-DD HH:mm', ISO 8601, 'DD/MM/YYYY HH:mm', RFC2822
+ */
+export function parseReceivedTimestamp(dateStr: string | undefined | null): number {
+  if (!dateStr) return 0;
+  const s = String(dateStr).trim();
+
+  // Định dạng ISO hoặc YYYY-MM-DD HH:mm(:ss)
+  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    const hour = isoMatch[4] ? parseInt(isoMatch[4], 10) : 0;
+    const min = isoMatch[5] ? parseInt(isoMatch[5], 10) : 0;
+    const sec = isoMatch[6] ? parseInt(isoMatch[6], 10) : 0;
+    return new Date(year, month, day, hour, min, sec).getTime();
+  }
+
+  // Định dạng chuẩn Việt Nam DD/MM/YYYY HH:mm(:ss)
+  const dmyMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0;
+    const min = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0;
+    const sec = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0;
+    return new Date(year, month, day, hour, min, sec).getTime();
+  }
+
+  const parsed = new Date(s).getTime();
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Sắp xếp danh sách văn bản email theo ưu tiên ngày nhận email
+ * Mặc định: 'desc' - Email mới nhất luôn ở trên cùng (index 0 / page 1)
+ */
+export function sortDraftsByReceivedDate(
+  items: EmailDraftItem[],
+  order: 'desc' | 'asc' = 'desc'
+): EmailDraftItem[] {
+  return [...items].sort((a, b) => {
+    const timeA = parseReceivedTimestamp(a.receivedDate);
+    const timeB = parseReceivedTimestamp(b.receivedDate);
+    if (timeB !== timeA) {
+      return order === 'desc' ? timeB - timeA : timeA - timeB;
+    }
+    return order === 'desc'
+      ? (b.id || '').localeCompare(a.id || '')
+      : (a.id || '').localeCompare(b.id || '');
+  });
 }
 
 /**

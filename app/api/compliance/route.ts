@@ -7,6 +7,7 @@ import {
   LicenseItem,
   StaffTrainingRecord,
   EmailDraftItem,
+  sortDraftsByReceivedDate,
 } from '@/lib/compliance';
 import { resolveDriveFolderId, DRIVE_FOLDER_MAP } from '@/lib/drive-folders';
 
@@ -109,15 +110,16 @@ export async function GET(req: Request) {
     }
 
     if (type === 'email_drafts') {
-      const emailDrafts = await readJsonFromStorage<EmailDraftItem[]>(
+      const rawDrafts = await readJsonFromStorage<EmailDraftItem[]>(
         supabase,
         EMAIL_DRAFTS_PATH,
         DEFAULT_EMAIL_DRAFTS
       );
+      const emailDrafts = sortDraftsByReceivedDate(rawDrafts, 'desc');
       return NextResponse.json({ configured: true, emailDrafts });
     }
 
-    const [licenses, training, emailDrafts] = await Promise.all([
+    const [licenses, training, rawDrafts] = await Promise.all([
       readJsonFromStorage<LicenseItem[]>(supabase, LICENSES_PATH, DEFAULT_LICENSES),
       readJsonFromStorage<StaffTrainingRecord[]>(
         supabase,
@@ -130,6 +132,7 @@ export async function GET(req: Request) {
         DEFAULT_EMAIL_DRAFTS
       ),
     ]);
+    const emailDrafts = sortDraftsByReceivedDate(rawDrafts, 'desc');
 
     return NextResponse.json({ configured: true, licenses, training, emailDrafts });
   } catch (err: any) {
@@ -301,14 +304,15 @@ export async function POST(req: Request) {
     }
 
     if (type === 'email_drafts' && Array.isArray(records)) {
-      const ok = await writeJsonToStorage(supabase, EMAIL_DRAFTS_PATH, records);
+      const sortedRecords = sortDraftsByReceivedDate(records, 'desc');
+      const ok = await writeJsonToStorage(supabase, EMAIL_DRAFTS_PATH, sortedRecords);
       if (!ok) {
         return NextResponse.json(
           { error: 'Không thể lưu danh sách văn bản email dự thảo.' },
           { status: 500 }
         );
       }
-      return NextResponse.json({ success: true, emailDrafts: records });
+      return NextResponse.json({ success: true, emailDrafts: sortedRecords });
     }
 
     return NextResponse.json({ error: 'Dữ liệu gửi lên không hợp lệ.' }, { status: 400 });
