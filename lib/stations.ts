@@ -1,9 +1,8 @@
 /**
- * Danh sách Đài trạm dẫn đường & Giám sát CNS/ATM thực tế của ATTECH
- * Trích xuất chuẩn xác theo Công văn số 1726/KTQLB-KTATCL (VATM/ATTECH)
+ * Danh sách 24 Đơn vị / Đài trạm CNS theo quy chuẩn thực tế của hệ thống ATTECH
+ * Trích xuất chuẩn xác theo danh mục phân quyền và biên chế tại các Đài trạm
  */
 export const ATTECH_STATIONS = [
-  'Đài DVOR/DME Tuy Hòa',
   'Đài DVOR/DME & ADS-B Nội Bài',
   'Đài DVOR/DME Đầu Tây Nội Bài',
   'Đài DVOR/DME VÀ NDB Nam Hà',
@@ -19,7 +18,6 @@ export const ATTECH_STATIONS = [
   'Đài DVOR/DME Phú Quốc',
   'Đài DVOR/DME Buôn Ma Thuột',
   'Đài DVOR/DME Tân Sơn Nhất',
-  'Đài DVOR/DME Long Thành',
   'Đài NDB Long Khánh',
   'Đài CVOR/DME Phan Thiết',
   'Đài DVOR/DME Cần Thơ',
@@ -28,13 +26,7 @@ export const ATTECH_STATIONS = [
   'Đài DVOR/DME Rạch Giá',
   'Đài DVOR/DME & ADS-B Thọ Xuân',
   'Đài DVOR/DME Chu Lai',
-  'Đài DVOR/DME Vân Đồn',
-  'Đài DVOR/DME Cà Mau',
-  'Trạm VHF Song Tử Tây (Quần đảo Trường Sa)',
-  'Trạm VHF Trường Sa Lớn (Quần đảo Trường Sa)',
-  'Trạm VHF Đất Mũi (Hòn Khoai)',
-  'Trạm CNS Thổ Chu / Giàn khoan',
-  'Khối Cơ quan Công ty (Toàn hệ thống)',
+  'Đài DVOR/DME Tuy Hòa',
 ] as const;
 
 export type AttechStation = typeof ATTECH_STATIONS[number];

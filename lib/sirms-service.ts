@@ -181,17 +181,35 @@ export function parseSirmsStationsToMap(
     // Devices & OIDs check
     const devices = Array.isArray(st.devices) ? st.devices : [];
     let alarms = 0;
+    let maxAlarm = 0;
+
     for (const d of devices) {
       if (d.status === 'alarm' || d.status === 'error' || d.hasAlarm || d.isError) {
         alarms++;
       }
+      for (const o of d.oids || []) {
+        if (o.alarm !== undefined && o.alarm !== 0) {
+          alarms++;
+          if (o.alarm > maxAlarm) maxAlarm = o.alarm;
+        }
+      }
     }
 
-    const status: 'active' | 'warning' | 'alert' = alarms > 1 ? 'alert' : alarms === 1 ? 'warning' : 'active';
+    // SIRMS liveMonitor: 0 = Normal, 1 = Warning (Orange), 2 = Alert (Red)
+    const liveMon = typeof st.liveMonitor === 'number' ? st.liveMonitor : 0;
+    let status: 'active' | 'warning' | 'alert' = 'active';
+
+    if (liveMon >= 2 || maxAlarm >= 2) {
+      status = 'alert';
+    } else if (liveMon === 1 || maxAlarm === 1 || alarms > 0) {
+      status = 'warning';
+    } else {
+      status = 'active';
+    }
 
     const info: StationLiveStatusInfo = {
       code: rawCode,
-      online: true,
+      online: devices.length > 0,
       deviceCount: devices.length,
       alarmsCount: alarms,
       status,
@@ -246,6 +264,8 @@ export function parseSirmsStationsToMap(
       'PHAN THIẾT': 'PTH',
       'TRƯỜNG SA LỚN': 'TSL',
       'SONG TỬ TÂY': 'STT',
+      'MỘC CHÂU': 'MC',
+      'PHA ĐIN': 'PDI',
       'ĐẤT MŨI': 'DMU',
       'LONG THÀNH': 'LTH',
       'CÀ MAU': 'CMA',

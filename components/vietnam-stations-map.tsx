@@ -266,12 +266,28 @@ export function VietnamStationsMap({
             <line x1="225" y1="541" x2="424" y2="634" /> {/* TSN - TSL */}
           </g>
 
-          {/* Plot all Nationwide Stations in UNIFIED GREEN THEME */}
+          {/* Plot all Nationwide Stations with Real-time SIRMS Live Status */}
           {NATIONWIDE_STATIONS.map((st) => {
             const selected = isSelected(st);
             const isHovered = hoveredStation?.code === st.code;
             const isVPH = st.code === 'VPH';
             const liveData = getStationLiveData(st.code);
+
+            // Compute dynamic status color from SIRMS (Image 3)
+            let statusColor = '#10b981'; // Green normal
+            let statusText = 'Bình thường';
+            if (liveData) {
+              if (liveData.status === 'alert') {
+                statusColor = '#ef4444'; // Red alarm
+                statusText = 'Báo động';
+              } else if (liveData.status === 'warning') {
+                statusColor = '#f59e0b'; // Orange warning
+                statusText = 'Cảnh báo';
+              } else if (liveData.deviceCount === 0) {
+                statusColor = '#94a3b8'; // Gray standby/no devices
+                statusText = 'Dự phòng';
+              }
+            }
 
             // Position VPH badge to the left of its dot, others to the right
             const badgeOffsetX = isVPH ? st.x - 32 : st.x + 6;
@@ -292,24 +308,24 @@ export function VietnamStationsMap({
                     cy={st.y}
                     r={9}
                     fill="none"
-                    stroke="#10b981"
+                    stroke={statusColor}
                     strokeWidth="1.8"
                     className="animate-pulse"
                   />
                 )}
 
-                {/* Central beacon dot: Tất cả đài trạm màu xanh (Emerald) */}
+                {/* Central beacon dot: Live SIRMS status color */}
                 <circle
                   cx={st.x}
                   cy={st.y}
                   r={selected ? 4.5 : 3.5}
-                  fill="#10b981"
+                  fill={statusColor}
                   stroke="#ffffff"
                   strokeWidth={selected ? 1.5 : 1}
-                  className="filter drop-shadow-[0_0_6px_#10b981]"
+                  style={{ filter: `drop-shadow(0 0 6px ${statusColor})` }}
                 />
 
-                {/* Badge Container (3-letter Station Code) */}
+                {/* Badge Container (Black pill with white/status Station Code per Image 3) */}
                 <g
                   transform={`translate(${badgeOffsetX}, ${badgeOffsetY})`}
                   className="transition-transform duration-150"
@@ -326,17 +342,17 @@ export function VietnamStationsMap({
                     width={st.code.length > 3 ? 34 : 28}
                     height="14"
                     rx="3"
-                    fill={selected ? '#065f46' : '#051815'}
+                    fill={selected ? '#0f293a' : '#090d16'}
                     fillOpacity={0.92}
-                    stroke={selected ? '#34d399' : '#059669'}
-                    strokeWidth={selected ? '1.5' : '0.9'}
+                    stroke={selected ? '#38bdf8' : '#334155'}
+                    strokeWidth={selected ? '1.5' : '0.8'}
                   />
                   <text
                     x={st.code.length > 3 ? 17 : 14}
                     y="10.5"
                     textAnchor="middle"
                     className={`font-mono text-[9px] font-bold ${
-                      selected ? 'fill-white' : 'fill-emerald-300'
+                      selected ? 'fill-sky-300' : 'fill-white'
                     }`}
                   >
                     {st.code}
@@ -348,67 +364,79 @@ export function VietnamStationsMap({
         </svg>
 
         {/* Hover / Tooltip HUD Card (Flight Ops & SIRMS SNMP Live Status) */}
-        {hoveredStation && (
-          <div
-            className="absolute top-4 right-4 z-20 w-72 p-3.5 rounded-xl bg-slate-900/95 border border-emerald-500/40 shadow-2xl backdrop-blur-md text-white pointer-events-none transition-all duration-200 animate-in fade-in zoom-in-95"
-          >
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
-                <h4 className="font-bold text-sm text-emerald-200">
-                  {hoveredStation.shortName} [{hoveredStation.code}]
-                </h4>
-              </div>
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                {hoveredStation.region}
-              </span>
-            </div>
+        {hoveredStation && (() => {
+          const live = getStationLiveData(hoveredStation.code);
+          const isAlert = live?.status === 'alert';
+          const isWarn = live?.status === 'warning';
+          const isStandby = live && live.deviceCount === 0;
 
-            <p className="text-xs text-slate-300 font-medium mb-2.5">
-              {hoveredStation.name}
-            </p>
+          const dotColor = isAlert ? 'bg-rose-500 shadow-[0_0_8px_#ef4444]' : isWarn ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]' : isStandby ? 'bg-slate-400' : 'bg-emerald-400 shadow-[0_0_8px_#10b981]';
+          const statusText = isAlert ? 'Báo động (Alert)' : isWarn ? 'Cảnh báo (Warning)' : isStandby ? 'Dự phòng / Standby' : 'Bình thường (Normal)';
+          const statusTextColor = isAlert ? 'text-rose-400' : isWarn ? 'text-amber-300' : isStandby ? 'text-slate-300' : 'text-emerald-300';
 
-            <div className="space-y-1.5 text-[11px] font-mono border-t border-slate-700/60 pt-2 text-slate-300">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Tọa độ (WGS-84):</span>
-                <span className="text-emerald-300">{hoveredStation.coordStr}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Loại đài dẫn đường:</span>
-                <span className="text-emerald-300 font-semibold">{hoveredStation.type}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Trạng thái phát sóng:</span>
-                <span className="text-emerald-400 flex items-center gap-1 font-sans font-medium">
-                  <CheckCircle2 className="w-3 h-3" /> Sẵn sàng 24/7
+          return (
+            <div
+              className="absolute top-4 right-4 z-20 w-72 p-3.5 rounded-xl bg-slate-900/95 border border-sky-500/30 shadow-2xl backdrop-blur-md text-white pointer-events-none transition-all duration-200 animate-in fade-in zoom-in-95"
+            >
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${dotColor}`} />
+                  <h4 className="font-bold text-sm text-sky-200">
+                    {hoveredStation.shortName} [{hoveredStation.code}]
+                  </h4>
+                </div>
+                <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-400/30">
+                  {hoveredStation.region}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Giám sát SIRMS:</span>
-                <span className="text-sky-300 flex items-center gap-1 font-sans">
-                  <Server className="w-3 h-3 text-sky-400" />
-                  {isSirmsConnected ? 'Live SNMP Feed' : 'Hệ thống Trực tuyến'}
-                </span>
-              </div>
-              {getStationLiveData(hoveredStation.code)?.deviceCount ? (
+
+              <p className="text-xs text-slate-300 font-medium mb-2.5">
+                {hoveredStation.name}
+              </p>
+
+              <div className="space-y-1.5 text-[11px] font-mono border-t border-slate-700/60 pt-2 text-slate-300">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Thiết bị giám sát:</span>
-                  <span className="text-emerald-300">
-                    {getStationLiveData(hoveredStation.code)?.deviceCount} thiết bị
+                  <span className="text-slate-400">Tọa độ (WGS-84):</span>
+                  <span className="text-sky-300">{hoveredStation.coordStr}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Loại đài dẫn đường:</span>
+                  <span className="text-sky-300 font-semibold">{hoveredStation.type}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Trạng thái thiết bị:</span>
+                  <span className={`flex items-center gap-1 font-sans font-medium ${statusTextColor}`}>
+                    {isAlert ? <AlertTriangle className="w-3 h-3 text-rose-400" /> : <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+                    {statusText}
                   </span>
                 </div>
-              ) : null}
-            </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Giám sát SIRMS:</span>
+                  <span className="text-sky-300 flex items-center gap-1 font-sans">
+                    <Server className="w-3 h-3 text-sky-400" />
+                    {isSirmsConnected ? 'Live SNMP Feed' : 'Hệ thống Trực tuyến'}
+                  </span>
+                </div>
+                {live?.deviceCount ? (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Thiết bị giám sát:</span>
+                    <span className="text-emerald-300">
+                      {live.deviceCount} thiết bị {live.alarmsCount > 0 ? `(${live.alarmsCount} cảnh báo)` : ''}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
 
-            <div className="mt-2.5 pt-2 border-t border-slate-700/40 flex items-center justify-between text-[10px] text-emerald-400/80">
-              <span>Bấm đài trạm để chọn đăng nhập</span>
-              <span className="font-mono">ATTECH SIRMS</span>
+              <div className="mt-2.5 pt-2 border-t border-slate-700/40 flex items-center justify-between text-[10px] text-sky-400/80">
+                <span>Bấm đài trạm để chọn đăng nhập</span>
+                <span className="font-mono">ATTECH SIRMS</span>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
-      {/* Bottom Bar: Selection Status */}
+      {/* Bottom Bar: Selection Status & Status Legend */}
       <div className="relative z-10 px-4 py-2.5 bg-slate-950/60 border-t border-sky-500/20 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-2">
           <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -418,14 +446,24 @@ export function VietnamStationsMap({
           </span>
         </div>
 
-        <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-mono">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-          <span className="font-semibold text-emerald-300">
-            Hệ thống 31 Đài trạm CNS/ATM sẵn sàng 24/7
-          </span>
+        {/* Legend matching SIRMS Map in Image 3 */}
+        <div className="flex items-center gap-3 text-[10px] text-slate-300 font-mono">
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+            <span className="text-slate-400">Bình thường</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+            <span className="text-slate-400">Cảnh báo</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+            <span className="text-slate-400">Báo động</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
+            <span className="text-slate-400">Dự phòng</span>
+          </div>
         </div>
       </div>
     </div>

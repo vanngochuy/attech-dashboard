@@ -61,6 +61,32 @@ export const NATIONWIDE_STATIONS: StationMapPoint[] = [
     "y": 90.9
   },
   {
+    "code": "PDI",
+    "name": "Đài DVOR/DME Pha Đin",
+    "shortName": "Pha Đin",
+    "type": "DVOR/DME",
+    "lat": 21.572,
+    "lng": 103.528,
+    "coordStr": "21°34'19.2\"N 103°31'40.8\"E",
+    "status": "active",
+    "region": "Miền Bắc",
+    "x": 108.0,
+    "y": 84.0
+  },
+  {
+    "code": "MC",
+    "name": "Đài DVOR/DME Mộc Châu",
+    "shortName": "Mộc Châu",
+    "type": "DVOR/DME",
+    "lat": 20.8437,
+    "lng": 104.6469,
+    "coordStr": "20°50'37.3\"N 104°38'48.8\"E",
+    "status": "active",
+    "region": "Miền Bắc",
+    "x": 142.0,
+    "y": 110.0
+  },
+  {
     "code": "VPH",
     "name": "Đài DVOR/DME Đầu Tây Nội Bài",
     "shortName": "Đầu Tây Nội Bài",
