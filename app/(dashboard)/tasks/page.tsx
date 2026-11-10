@@ -703,31 +703,31 @@ export default function EmailDocumentTasksPage() {
   const renderMatchBadge = (item: EmailDraftItem) => {
     if (item.matchType === 'UPDATE_CANDIDATE') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-300">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-300 whitespace-nowrap">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
           <span>Bản cập nhật ({item.similarityScore || 90}%)</span>
         </span>
       );
     }
     if (item.matchType === 'EXACT_DUPLICATE') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
           <span>Trùng số hiệu</span>
         </span>
       );
     }
     if (item.matchType === 'PROMOTED') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
           <span>Đã chuyển Tài liệu</span>
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-sky-50 text-sky-700 border border-sky-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-sky-50 text-sky-700 border border-sky-200 whitespace-nowrap">
+        <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
         <span>Văn bản mới (Dự thảo)</span>
       </span>
     );
@@ -1407,8 +1407,8 @@ export default function EmailDocumentTasksPage() {
                     <ArrowUp className="w-3.5 h-3.5 text-sky-600 group-hover:scale-110 transition-transform" />
                   )}
                 </button>
-                <span className="w-36 text-center">ĐỐI CHIẾU</span>
-                <span className="w-32 text-right">THAO TÁC</span>
+                <span className="w-40 text-center shrink-0">ĐỐI CHIẾU</span>
+                <span className="w-44 text-right shrink-0">THAO TÁC</span>
               </div>
             </div>
 
@@ -1511,11 +1511,11 @@ export default function EmailDocumentTasksPage() {
                         {item.receivedDate ? formatToDMYTime(item.receivedDate) : '---'}
                       </span>
 
-                      <div className="w-36 text-center">{renderMatchBadge(item)}</div>
+                      <div className="w-40 text-center shrink-0">{renderMatchBadge(item)}</div>
 
                       {/* Cột Thao tác */}
                       <div
-                        className="w-32 text-right flex items-center justify-end gap-1"
+                        className="w-44 shrink-0 text-right flex items-center justify-end gap-1"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {/* Nút AI Quét 2 trang đầu */}
