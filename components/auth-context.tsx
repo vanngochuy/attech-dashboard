@@ -20,6 +20,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { ATTECH_STATIONS } from '@/lib/stations';
+import { VietnamStationsMap } from './vietnam-stations-map';
 
 export type UserRole = 'admin' | 'user' | null;
 type FlightPhase = 'idle' | 'takeoff' | 'landing';
@@ -454,117 +455,49 @@ function AttechLoginGate({
         }
       `}</style>
 
-      {/* Nền Bầu trời Hàng không + Đài Radar CNS/ATM Động */}
-      <div className="relative flex-1 flex flex-col justify-between p-8 lg:p-12 bg-gradient-to-br from-slate-950 via-sky-950 to-indigo-950 overflow-hidden">
-        {/* Vòng quét Radar CNS/DVOR-DME động phía sau */}
-        <div className="absolute -right-24 -bottom-24 w-[540px] h-[540px] rounded-full border border-sky-400/15 pointer-events-none flex items-center justify-center">
-          <div className="w-[400px] h-[400px] rounded-full border border-sky-400/15 flex items-center justify-center">
-            <div className="w-[260px] h-[260px] rounded-full border border-sky-400/20 flex items-center justify-center">
-              <div className="w-[120px] h-[120px] rounded-full border border-sky-400/25" />
+      {/* Cột Trái: Bản đồ Đài trạm CNS/ATM Toàn quốc (CV 1726/KTQLB-KTATCL) & Nhận diện ATTECH */}
+      <div className="relative flex-1 flex flex-col justify-between p-6 lg:p-8 bg-gradient-to-br from-slate-950 via-sky-950 to-indigo-950 overflow-hidden">
+        {/* Header thương hiệu ATTECH & VATM */}
+        <div className="relative z-10 shrink-0 mb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-300 text-xs font-semibold">
+              <Radio className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
+              <span>TỔNG CÔNG TY QUẢN LÝ BAY VIỆT NAM (VATM)</span>
+            </div>
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[11px] font-mono">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>CNS/ATM NETWORK 24/7</span>
             </div>
           </div>
-          {/* Tia quét Radar */}
-          <div
-            className="absolute inset-0 rounded-full"
-            style={{
-              background:
-                'conic-gradient(from 0deg, rgba(56, 189, 248, 0.28) 0deg, rgba(56, 189, 248, 0.02) 70deg, transparent 90deg)',
-              animation: 'radarSweep 8s linear infinite',
-            }}
-          />
-          {/* Chấm mục tiêu tàu bay trên màn hình Radar */}
-          <div
-            className="absolute top-28 left-36 flex items-center gap-1.5"
-            style={{ animation: 'pulseBeacon 2.8s ease-in-out infinite' }}
-          >
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981]" />
-            <span className="font-mono text-[10px] text-emerald-300 bg-slate-900/70 px-1.5 py-0.5 rounded border border-emerald-500/30">
-              CALIB-350 · FL280
-            </span>
-          </div>
-          <div
-            className="absolute bottom-40 left-24 flex items-center gap-1.5"
-            style={{ animation: 'pulseBeacon 3.4s ease-in-out 1s infinite' }}
-          >
-            <span className="w-2 h-2 rounded-full bg-sky-400 shadow-[0_0_10px_#38bdf8]" />
-            <span className="font-mono text-[10px] text-sky-300 bg-slate-900/70 px-1.5 py-0.5 rounded border border-sky-500/30">
-              VN-ATTECH · CNS/ATM
-            </span>
-          </div>
-        </div>
 
-        {/* Đám mây động nhẹ */}
-        <div
-          className="absolute top-20 right-16 w-72 h-20 rounded-full bg-sky-400/10 blur-2xl pointer-events-none"
-          style={{ animation: 'floatCloudSlow 9s ease-in-out infinite' }}
-        />
-
-        {/* Header thương hiệu ATTECH & VATM */}
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-300 text-xs font-semibold mb-5">
-            <Radio className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
-            <span>TỔNG CÔNG TY QUẢN LÝ BAY VIỆT NAM (VATM)</span>
-          </div>
-
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-3.5 mb-2">
             <img
               src="/attech-logo.png"
               alt="ATTECH Logo"
-              className="w-16 h-16 rounded-full object-contain shadow-lg border-2 border-white/25 bg-white/10 shrink-0"
+              className="w-12 h-12 rounded-full object-contain shadow-lg border-2 border-white/25 bg-white/10 shrink-0"
             />
             <div>
-              <h1 className="text-3xl lg:text-4xl font-extrabold tracking-wider">
+              <h1 className="text-2xl lg:text-3xl font-extrabold tracking-wider">
                 <span className="text-[#ff2a2a]">A</span>
                 <span className="text-[#38bdf8]">TTECH</span>
               </h1>
-              <p className="text-sm font-semibold text-sky-100 mt-0.5">
+              <p className="text-xs font-semibold text-sky-100 mt-0.5">
                 CÔNG TY TNHH KỸ THUẬT QUẢN LÝ BAY
               </p>
             </div>
           </div>
 
-          <p className="text-sm text-slate-300 max-w-xl leading-relaxed">
-            Hệ thống Quản lý Văn bản Pháp quy, Tài liệu Kỹ thuật CNS/ATM, An toàn — PCCC — PCTT &amp; Trợ lý Tri thức AI nội bộ.
+          <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+            Hệ thống Quản lý Văn bản Pháp quy, Kỹ thuật CNS/ATM &amp; Bản đồ Mạng lưới Đài trạm Dẫn đường Toàn quốc (CV 1726/KTQLB-KTATCL).
           </p>
         </div>
 
-        {/* 3 Trụ cột hoạt động đặc trưng của ATTECH (theo attech.com.vn) */}
-        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-3.5 my-8 max-w-2xl">
-          <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 transition-all">
-            <div className="w-9 h-9 rounded-xl bg-sky-500/20 border border-sky-400/30 flex items-center justify-center text-sky-300 mb-3">
-              <Radar className="w-5 h-5" />
-            </div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-1">
-              Kỹ thuật CNS / ATM
-            </h3>
-            <p className="text-[11px] text-slate-300 leading-relaxed">
-              Hệ thống Thông tin, Dẫn đường (DVOR/DME, ILS) và Giám sát hàng không (Radar, ADS-B).
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 transition-all">
-            <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 mb-3">
-              <Compass className="w-5 h-5" />
-            </div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-1">
-              Bay Kiểm tra Hiệu chuẩn
-            </h3>
-            <p className="text-[11px] text-slate-300 leading-relaxed">
-              Đảm bảo độ chính xác và an toàn tuyệt đối cho các đài trạm dẫn đường trên toàn quốc.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 transition-all">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300 mb-3">
-              <Shield className="w-5 h-5" />
-            </div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-1">
-              An toàn &amp; Tri thức AI
-            </h3>
-            <p className="text-[11px] text-slate-300 leading-relaxed">
-              Tra cứu văn bản hiệu lực tức thì và hỏi đáp chuyên sâu với Trợ lý AI NotebookLM.
-            </p>
-          </div>
+        {/* Bản đồ Định vị Đài trạm Toàn quốc (Thay thế cho vòng tròn radar cũ) */}
+        <div className="relative z-10 flex-1 my-2 min-h-[440px] flex flex-col">
+          <VietnamStationsMap
+            activeStation={staffDept}
+            onSelectStation={(stName) => setStaffDept(stName)}
+          />
         </div>
 
         {/* Footer thông tin liên hệ chính thức từ attech.com.vn */}
