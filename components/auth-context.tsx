@@ -441,10 +441,6 @@ function AttechLoginGate({
   return (
     <div className="fixed inset-0 z-50 flex flex-col lg:flex-row bg-slate-950 text-white overflow-y-auto lg:overflow-hidden font-sans">
       <style>{`
-        @keyframes radarSweep {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
         @keyframes floatCloudSlow {
           0%, 100% { transform: translateX(0px) translateY(0px); }
           50% { transform: translateX(28px) translateY(-8px); }
@@ -488,7 +484,7 @@ function AttechLoginGate({
           </div>
 
           <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
-            Hệ thống Quản lý Văn bản Pháp quy, Kỹ thuật CNS/ATM &amp; Bản đồ Mạng lưới Đài trạm Dẫn đường Toàn quốc.
+            Hệ thống Quản lý Văn bản Pháp quy, Kỹ thuật CNS/ATM.
           </p>
         </div>
 

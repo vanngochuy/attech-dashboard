@@ -42,15 +42,7 @@ export function VietnamStationsMap({
         <div className="absolute top-0 bottom-0 left-1/2 w-px bg-gradient-to-b from-transparent via-sky-500/15 to-transparent" />
         <div className="absolute left-0 right-0 top-1/2 h-px bg-gradient-to-r from-transparent via-sky-500/15 to-transparent" />
 
-        {/* Sweeping radar beam */}
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[540px] h-[540px] rounded-full pointer-events-none"
-          style={{
-            background:
-              'conic-gradient(from 0deg, rgba(56, 189, 248, 0.18) 0deg, rgba(56, 189, 248, 0.02) 65deg, transparent 80deg)',
-            animation: 'radarSweep 10s linear infinite',
-          }}
-        />
+
 
         {/* Subtle grid lines */}
         <div
