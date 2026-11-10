@@ -34,7 +34,8 @@ async function ensureComplianceBucket(supabase: any) {
 
 async function readJsonFromStorage<T>(supabase: any, path: string, fallback: T): Promise<T> {
   try {
-    const { data, error } = await supabase.storage.from(BUCKET_NAME).download(path);
+    const nonce = Date.now().toString();
+    const { data, error } = await supabase.storage.from(BUCKET_NAME).download(path, { cacheNonce: nonce });
     if (error || !data) {
       await writeJsonToStorage(supabase, path, fallback);
       return fallback;
@@ -54,6 +55,7 @@ async function writeJsonToStorage<T>(supabase: any, path: string, payload: T): P
     const { error } = await supabase.storage.from(BUCKET_NAME).upload(path, blob, {
       contentType: 'application/json',
       upsert: true,
+      cacheControl: '0',
     });
     return !error;
   } catch (err) {

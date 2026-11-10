@@ -174,7 +174,7 @@ export default function EmailDocumentTasksPage() {
   const fetchEmailDrafts = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/compliance?type=email_drafts', { cache: 'no-store' });
+      const res = await fetch(`/api/compliance?type=email_drafts&t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (Array.isArray(data.emailDrafts)) {
         setDrafts(sortDraftsByReceivedDate(data.emailDrafts, 'desc'));
@@ -296,13 +296,29 @@ export default function EmailDocumentTasksPage() {
         }),
       });
       const metaData = await metaRes.json();
-      if (Array.isArray(metaData.emailDrafts)) {
-        setDrafts(metaData.emailDrafts);
-      } else if (metaData.updatedDraft) {
-        setDrafts((prev) =>
-          prev.map((d) => (d.id === item.id ? { ...d, ...metaData.updatedDraft } : d))
-        );
-      }
+      if (!metaRes.ok) throw new Error(metaData.error || 'Cập nhật AI thất bại');
+
+      // Cập nhật an toàn: hợp nhất bảo toàn 100% tất cả các văn bản đã quét trước đó
+      setDrafts((prev) => {
+        if (Array.isArray(metaData.emailDrafts)) {
+          const prevMap = new Map(prev.map((d) => [d.id, d]));
+          return metaData.emailDrafts.map((serverDoc: EmailDraftItem) => {
+            const prevDoc = prevMap.get(serverDoc.id);
+            // Nếu cục bộ máy khách đã có dữ liệu quét AI mà server trả về chưa kịp có -> ưu tiên giữ bản đã quét
+            if (prevDoc?.aiExtracted && !serverDoc.aiExtracted) {
+              return prevDoc;
+            }
+            if (serverDoc.id === item.id && metaData.updatedDraft) {
+              return { ...serverDoc, ...metaData.updatedDraft };
+            }
+            return serverDoc;
+          });
+        }
+        if (metaData.updatedDraft) {
+          return prev.map((d) => (d.id === item.id ? { ...d, ...metaData.updatedDraft } : d));
+        }
+        return prev;
+      });
 
       showToast(
         'success',

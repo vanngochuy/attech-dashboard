@@ -13,6 +13,44 @@ export const dynamic = 'force-dynamic';
 const BUCKET_NAME = 'compliance-files';
 const EMAIL_DRAFTS_PATH = 'data/email_drafts.json';
 
+// Helper: Tải danh sách văn bản email MỚI NHẤT từ Supabase Storage, luôn kèm cacheNonce để chống cache CDN Cloudflare (3600s)
+async function loadFreshDraftsFromStorage(supabase: any): Promise<EmailDraftItem[]> {
+  if (!supabase) return DEFAULT_EMAIL_DRAFTS;
+  try {
+    const nonce = Date.now().toString();
+    const { data, error } = await supabase.storage.from(BUCKET_NAME).download(EMAIL_DRAFTS_PATH, { cacheNonce: nonce });
+    if (!error && data) {
+      const parsed = JSON.parse(await data.text());
+      if (Array.isArray(parsed)) return sortDraftsByReceivedDate(parsed, 'desc');
+    }
+  } catch (err) {
+    console.warn('Lỗi đọc fresh email_drafts.json từ storage:', err);
+  }
+  return DEFAULT_EMAIL_DRAFTS;
+}
+
+// Helper: Ghi danh sách văn bản email lên Supabase Storage với cacheControl: '0' để chống Cloudflare lưu cache cũ
+async function saveDraftsToStorage(supabase: any, drafts: EmailDraftItem[]): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const sorted = sortDraftsByReceivedDate(drafts, 'desc');
+    const blob = new Blob([JSON.stringify(sorted, null, 2)], { type: 'application/json' });
+    const { error } = await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
+      contentType: 'application/json',
+      upsert: true,
+      cacheControl: '0',
+    });
+    if (error) {
+      console.error('Lỗi upload email_drafts.json:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Ngoại lệ khi upload email_drafts.json:', err);
+    return false;
+  }
+}
+
 // Từ dừng hành chính để tính độ tương đồng cốt lõi giữa văn bản Email và văn bản chính thức ở tab Tài liệu
 const ADMIN_STOPWORDS = new Set([
   'quyết', 'định', 'về', 'việc', 'vv', 'ban', 'hành', 'sửa', 'đổi', 'bổ', 'sung',
@@ -216,20 +254,11 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action, fromDate, toDate, senderFilter, draftItem, targetDraftId } = body;
 
-    // Đọc danh sách hiện tại từ Supabase Storage
-    let currentDrafts: EmailDraftItem[] = DEFAULT_EMAIL_DRAFTS;
+    // Đọc danh sách hiện tại từ Supabase Storage (luôn tươi mới, chống cache Cloudflare)
+    let currentDrafts: EmailDraftItem[] = await loadFreshDraftsFromStorage(supabase);
     let officialDocs: any[] = [];
 
     if (supabase) {
-      try {
-        const { data } = await supabase.storage.from(BUCKET_NAME).download(EMAIL_DRAFTS_PATH);
-        if (data) {
-          const parsed = JSON.parse(await data.text());
-          if (Array.isArray(parsed)) currentDrafts = sortDraftsByReceivedDate(parsed, 'desc');
-        }
-      } catch {
-        // Ignore and use fallback
-      }
 
       try {
         // Lấy 1 lần duy nhất danh sách văn bản chính thức từ `document_files` để đối chiếu siêu tốc trong bộ nhớ
@@ -272,13 +301,7 @@ export async function POST(req: Request) {
       };
 
       const updated = sortDraftsByReceivedDate([newDraft, ...currentDrafts], 'desc');
-      if (supabase) {
-        const blob = new Blob([JSON.stringify(updated, null, 2)], { type: 'application/json' });
-        await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
-          contentType: 'application/json',
-          upsert: true,
-        });
-      }
+      await saveDraftsToStorage(supabase, updated);
 
       return NextResponse.json({
         success: true,
@@ -383,16 +406,7 @@ export async function POST(req: Request) {
       }
 
       const sortedDrafts = sortDraftsByReceivedDate(reEvaluatedDrafts, 'desc');
-
-      if (supabase) {
-        const blob = new Blob([JSON.stringify(sortedDrafts, null, 2)], {
-          type: 'application/json',
-        });
-        await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
-          contentType: 'application/json',
-          upsert: true,
-        });
-      }
+      await saveDraftsToStorage(supabase, sortedDrafts);
 
       return NextResponse.json({
         success: true,
@@ -446,13 +460,7 @@ export async function POST(req: Request) {
           : d
       );
 
-      if (supabase) {
-        const blob = new Blob([JSON.stringify(updated, null, 2)], { type: 'application/json' });
-        await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
-          contentType: 'application/json',
-          upsert: true,
-        });
-      }
+      await saveDraftsToStorage(supabase, updated);
 
       return NextResponse.json({
         success: true,
@@ -515,12 +523,8 @@ export async function POST(req: Request) {
 
       const sortedUpdated = sortDraftsByReceivedDate(updated, 'desc');
 
-      if (supabase && importedCount > 0) {
-        const blob = new Blob([JSON.stringify(sortedUpdated, null, 2)], { type: 'application/json' });
-        await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
-          contentType: 'application/json',
-          upsert: true,
-        });
+      if (importedCount > 0) {
+        await saveDraftsToStorage(supabase, sortedUpdated);
       }
 
       return NextResponse.json({ success: true, importedCount, emailDrafts: sortedUpdated });
@@ -559,14 +563,7 @@ export async function POST(req: Request) {
       }
 
       const sortedReEvaluated = sortDraftsByReceivedDate(reEvaluated, 'desc');
-
-      if (supabase) {
-        const blob = new Blob([JSON.stringify(sortedReEvaluated, null, 2)], { type: 'application/json' });
-        await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
-          contentType: 'application/json',
-          upsert: true,
-        });
-      }
+      await saveDraftsToStorage(supabase, sortedReEvaluated);
 
       return NextResponse.json({
         success: true,
@@ -577,12 +574,14 @@ export async function POST(req: Request) {
 
     // 6. Hành động: Cập nhật kết quả AI Gemini đã đọc 2 trang đầu của 1 file PDF cụ thể
     if (action === 'AI_EXTRACT_SINGLE' && body.draftId) {
-      const draftIndex = currentDrafts.findIndex((d) => d.id === body.draftId);
+      // Đọc fresh drafts từ Storage ngay lập tức để không bao giờ ghi đè lên các bản quét khác
+      const freshDrafts = await loadFreshDraftsFromStorage(supabase);
+      const draftIndex = freshDrafts.findIndex((d) => d.id === body.draftId);
       if (draftIndex === -1) {
         return NextResponse.json({ error: 'Không tìm thấy văn bản' }, { status: 404 });
       }
 
-      const target = currentDrafts[draftIndex];
+      const target = freshDrafts[draftIndex];
 
       // Nếu văn bản đã được AI trích xuất trước đó và không có cờ force -> giữ nguyên, không ghi đè lại
       if (target.aiExtracted && !body.force) {
@@ -590,7 +589,7 @@ export async function POST(req: Request) {
           success: true,
           message: 'Văn bản đã được AI xử lý trước đó',
           updatedDraft: target,
-          emailDrafts: currentDrafts,
+          emailDrafts: freshDrafts,
         });
       }
 
@@ -616,19 +615,10 @@ export async function POST(req: Request) {
         comparisonSummary: comp.comparisonSummary,
         updatedAt: new Date().toISOString(),
       };
-      currentDrafts[draftIndex] = updatedItem;
+      freshDrafts[draftIndex] = updatedItem;
 
-      const sortedCurrent = sortDraftsByReceivedDate(currentDrafts, 'desc');
-
-      if (supabase) {
-        const blob = new Blob([JSON.stringify(sortedCurrent, null, 2)], {
-          type: 'application/json',
-        });
-        await supabase.storage.from(BUCKET_NAME).upload(EMAIL_DRAFTS_PATH, blob, {
-          contentType: 'application/json',
-          upsert: true,
-        });
-      }
+      const sortedCurrent = sortDraftsByReceivedDate(freshDrafts, 'desc');
+      await saveDraftsToStorage(supabase, sortedCurrent);
 
       return NextResponse.json({
         success: true,
