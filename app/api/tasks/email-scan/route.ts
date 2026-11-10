@@ -6,6 +6,7 @@ import {
   EmailDraftMatchType,
   sortDraftsByReceivedDate,
 } from '@/lib/compliance';
+import { abbreviateIssuer } from '@/lib/issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,17 +86,19 @@ function heuristicExtractFromText(pdfFileName: string, emailSubject?: string): {
   // 1. Tìm số hiệu văn bản (Ví dụ: 8634/BXD-VP, 7426/QLB-VPTCT, 346/QĐ-KTQLB, 8067/QLB-VSTBPN, 1550/TTHK-CSDL...)
   const code = cleanDocumentCode(cleanName) || cleanDocumentCode(emailSubject || '');
 
-  // 2. Nhận diện Cơ quan ban hành từ Mã ký hiệu hoặc tên viết tắt
-  let issuer = 'Công ty TNHH Kỹ thuật Quản lý bay';
+  // 2. Nhận diện Cơ quan ban hành từ Mã ký hiệu hoặc tên viết tắt (chuẩn hóa: ATTECH, VATM, CHK)
+  let issuer = 'ATTECH';
   const upper = fullText.toUpperCase();
-  if (upper.includes('BXD') || upper.includes('BỘ XÂY DỰNG')) {
+  if (upper.includes('KTQLB') || upper.includes('ATTECH') || upper.includes('KỸ THUẬT QUẢN LÝ BAY')) {
+    issuer = 'ATTECH';
+  } else if (upper.includes('CHK') || upper.includes('CỤC HÀNG KHÔNG') || upper.includes('CAAV')) {
+    issuer = 'CHK';
+  } else if (upper.includes('QLB') || upper.includes('VATM') || upper.includes('QUẢN LÝ BAY')) {
+    issuer = 'VATM';
+  } else if (upper.includes('BXD') || upper.includes('BỘ XÂY DỰNG')) {
     issuer = 'Bộ Xây dựng';
   } else if (upper.includes('BGTVT') || upper.includes('BỘ GTVT') || upper.includes('BỘ GIAO THÔNG')) {
     issuer = 'Bộ Giao thông Vận tải';
-  } else if (upper.includes('CHK') || upper.includes('CỤC HÀNG KHÔNG')) {
-    issuer = 'Cục Hàng không Việt Nam';
-  } else if (upper.includes('QLB') || upper.includes('VATM') || upper.includes('TỔNG CÔNG TY QUẢN LÝ BAY')) {
-    issuer = 'Tổng công ty Quản lý bay VN';
   } else if (upper.includes('TTHK') || upper.includes('TRUNG TÂM')) {
     issuer = 'Trung tâm Quản lý luồng không lưu';
   } else if (upper.includes('CVMB') || upper.includes('CẢNG VỤ')) {
@@ -328,7 +331,7 @@ export async function POST(req: Request) {
                     extractedTitle:
                       item.extractedTitle || heuristic.title,
                     extractedCode: item.extractedCode || heuristic.code,
-                    extractedIssuer: item.extractedIssuer || heuristic.issuer,
+                    extractedIssuer: abbreviateIssuer(item.extractedIssuer || heuristic.issuer),
                     extractedIssueDate: item.extractedIssueDate || (item.receivedDate ? item.receivedDate.slice(0, 10) : ''),
                     scopeDomain: item.scopeDomain || 'QL_KY_THUAT',
                     fileUrl: item.fileUrl || '',
@@ -545,7 +548,7 @@ export async function POST(req: Request) {
         reEvaluated.push({
           ...draft,
           extractedCode: code,
-          extractedIssuer: issuer,
+          extractedIssuer: abbreviateIssuer(issuer),
           extractedTitle: title,
           matchType: comp.matchType,
           similarityScore: comp.similarityScore,
@@ -594,7 +597,7 @@ export async function POST(req: Request) {
       const m = body.metadata || {};
       const newTitle = m.title || target.extractedTitle;
       const newCode = m.document_code || target.extractedCode || '';
-      const newIssuer = m.issuing_authority || target.extractedIssuer || 'ATTECH';
+      const newIssuer = abbreviateIssuer(m.issuing_authority || target.extractedIssuer || 'ATTECH');
       const newDate = m.issue_date || target.extractedIssueDate || '';
       const newScope = m.scope_domain || target.scopeDomain || 'QL_KY_THUAT';
 

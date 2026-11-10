@@ -46,6 +46,7 @@ import {
   parseReceivedTimestamp,
   sortDraftsByReceivedDate,
 } from '@/lib/compliance';
+import { abbreviateIssuer } from '@/lib/issuer';
 
 // Cắt tối đa 2 trang đầu của file PDF để AI Gemini trích xuất siêu tốc
 async function slicePdfFirst2PagesForEmail(originalFile: File): Promise<File> {
@@ -305,7 +306,7 @@ export default function EmailDocumentTasksPage() {
 
       showToast(
         'success',
-        `AI đã đọc 2 trang đầu: ${data.metadata?.document_code || 'Chưa rõ số'} - ${data.metadata?.issuing_authority || ''}`
+        `AI đã đọc 2 trang đầu: ${data.metadata?.document_code || 'Chưa rõ số'} - ${abbreviateIssuer(data.metadata?.issuing_authority) || 'ATTECH'}`
       );
     } catch (err: any) {
       showToast('error', err.message || 'Lỗi quét AI');
@@ -397,7 +398,7 @@ export default function EmailDocumentTasksPage() {
             if (!emailSubject) setEmailSubject(`V/v gửi văn bản: ${m.title}`);
           }
           if (m.document_code) setExtractedCode(m.document_code);
-          if (m.issuing_authority) setExtractedIssuer(m.issuing_authority);
+          if (m.issuing_authority) setExtractedIssuer(abbreviateIssuer(m.issuing_authority));
           if (m.issue_date) setExtractedIssueDate(m.issue_date);
           if (m.scope_domain) setScopeDomain(m.scope_domain);
           setAiFilled(true);
@@ -447,7 +448,7 @@ export default function EmailDocumentTasksPage() {
             pdfFileName: pdfFileName || `${extractedTitle.trim().slice(0, 40)}.pdf`,
             extractedTitle: extractedTitle.trim(),
             extractedCode: extractedCode.trim(),
-            extractedIssuer: extractedIssuer.trim(),
+            extractedIssuer: abbreviateIssuer(extractedIssuer.trim()) || 'ATTECH',
             extractedIssueDate,
             scopeDomain,
             fileUrl,
@@ -639,7 +640,7 @@ export default function EmailDocumentTasksPage() {
       id: item.id,
       file_name: item.extractedTitle,
       document_code: item.extractedCode || null,
-      issuing_authority: item.extractedIssuer || 'ATTECH',
+      issuing_authority: abbreviateIssuer(item.extractedIssuer || 'ATTECH'),
       issue_date: item.extractedIssueDate || item.receivedDate || null,
       status: item.matchType === 'PROMOTED' ? 'ACTIVE' : 'DRAFT_EMAIL',
       drive_file_id: item.driveFileId || null,
@@ -663,7 +664,7 @@ export default function EmailDocumentTasksPage() {
       id: item.id,
       file_name: item.extractedTitle,
       document_code: item.extractedCode || null,
-      issuing_authority: item.extractedIssuer || 'ATTECH',
+      issuing_authority: abbreviateIssuer(item.extractedIssuer || 'ATTECH'),
       issue_date: item.extractedIssueDate || item.receivedDate || null,
       status: item.matchType === 'PROMOTED' ? 'ACTIVE' : 'DRAFT_EMAIL',
       drive_file_id: item.driveFileId || null,
@@ -1236,9 +1237,12 @@ export default function EmailDocumentTasksPage() {
 
                     {/* Hàng 3 (Đơn vị & Thao tác nhanh): Tên cơ quan ban hành + 3 nút tròn nhỏ gọn [👁️ Xem PDF] – [✨ Hỏi AI] – [🔄 Đối chiếu] */}
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold truncate max-w-[130px]">
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold truncate max-w-[130px]"
+                        title={item.extractedIssuer || 'ATTECH'}
+                      >
                         <Building className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="truncate">{item.extractedIssuer || 'ATTECH'}</span>
+                        <span className="truncate">{abbreviateIssuer(item.extractedIssuer || 'ATTECH')}</span>
                       </span>
 
                       <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -1495,8 +1499,8 @@ export default function EmailDocumentTasksPage() {
                         {item.extractedCode || <span className="text-slate-300 font-normal italic">Chưa có</span>}
                       </span>
 
-                      <span className="w-40 text-left text-xs text-slate-700 font-medium truncate hidden md:inline" title={item.extractedIssuer}>
-                        {item.extractedIssuer || 'ATTECH'}
+                      <span className="w-40 text-left text-xs text-slate-700 font-medium truncate hidden md:inline" title={item.extractedIssuer || 'ATTECH'}>
+                        {abbreviateIssuer(item.extractedIssuer || 'ATTECH')}
                       </span>
 
                       <span className="w-28 text-center font-mono text-xs text-slate-600 hidden lg:inline">
@@ -1736,6 +1740,12 @@ export default function EmailDocumentTasksPage() {
                       </span>
                     </p>
                     <p>
+                      <strong>Đơn vị ban hành:</strong>{' '}
+                      <span className="font-semibold text-slate-800" title={compareItem.extractedIssuer || 'ATTECH'}>
+                        {abbreviateIssuer(compareItem.extractedIssuer || 'ATTECH')}
+                      </span>
+                    </p>
+                    <p>
                       <strong>Người gửi Email:</strong> {compareItem.senderEmail}
                     </p>
                     <p>
@@ -1787,7 +1797,9 @@ export default function EmailDocumentTasksPage() {
                         </p>
                         <p>
                           <strong>Đơn vị ban hành:</strong>{' '}
-                          {compareItem.matchedOfficialDoc.issuer || 'ATTECH'}
+                          <span className="font-semibold text-slate-800" title={compareItem.matchedOfficialDoc.issuer || 'ATTECH'}>
+                            {abbreviateIssuer(compareItem.matchedOfficialDoc.issuer || 'ATTECH')}
+                          </span>
                         </p>
                         <p>
                           <strong>Ngày ban hành cũ:</strong>{' '}
