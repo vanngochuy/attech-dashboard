@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateText } from 'ai';
-import { getSupabaseAdminClient, isSupabaseAdminConfigured, cleanEnv } from '@/lib/supabase';
+import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase';
+import { getNextGeminiApiKey, getAllGeminiApiKeys } from '@/lib/gemini-keys';
 
 export const maxDuration = 45;
 
@@ -23,9 +24,9 @@ export async function POST(req: Request) {
     }
 
     const trimmedQuery = query.trim();
-    const apiKey = cleanEnv(process.env.GEMINI_API_KEY);
+    const keys = getAllGeminiApiKeys();
 
-    if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY') {
+    if (keys.length === 0) {
       return NextResponse.json(
         { error: 'Chưa cấu hình GEMINI_API_KEY trên hệ thống để sử dụng tính năng Tìm AI.' },
         { status: 500 }
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Không thể kết nối cơ sở dữ liệu Supabase' }, { status: 500 });
     }
 
-    const google = createGoogleGenerativeAI({ apiKey });
+    const google = createGoogleGenerativeAI({ apiKey: getNextGeminiApiKey() });
 
     // Bước 1: Gemini phân tích ý định và trích xuất từ khóa ngữ nghĩa/viết tắt ngành Quản lý bay
     let keywords: string[] = [trimmedQuery.toLowerCase()];

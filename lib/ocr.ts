@@ -1,5 +1,5 @@
 import { PDFDocument } from 'pdf-lib';
-import { cleanEnv } from '@/lib/supabase';
+import { executeWithGeminiKeyRotation, getAllGeminiApiKeys } from '@/lib/gemini-keys';
 
 const MAX_OCR_PAGES = 20;
 
@@ -13,8 +13,8 @@ export async function extractDocumentOcr(
   mimeType: string,
   fileName: string
 ): Promise<string | null> {
-  const apiKey = cleanEnv(process.env.GEMINI_API_KEY);
-  if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY') {
+  const keys = getAllGeminiApiKeys();
+  if (keys.length === 0) {
     console.warn('[OCR] Chưa cấu hình GEMINI_API_KEY, bỏ qua OCR.');
     return null;
   }
@@ -69,41 +69,42 @@ Lưu ý:
 - Giữ chính xác số hiệu, ngày tháng, con số, tên đơn vị, chức danh người ký.
 - Không bình luận thêm ngoài nội dung tài liệu.`;
 
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
-
   try {
-    const res = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: targetMimeType,
-                  data: base64Data,
+    const data = await executeWithGeminiKeyRotation(async (key) => {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${key}`;
+      const res = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    mimeType: targetMimeType,
+                    data: base64Data,
+                  },
                 },
-              },
-            ],
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 8192,
           },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 8192,
-        },
-      }),
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`[OCR] Lỗi gọi Gemini OCR (${res.status}): ${errText}`);
+      }
+
+      return await res.json();
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error('[OCR] Lỗi gọi Gemini OCR:', res.status, errText);
-      return null;
-    }
-
-    const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     if (!text) return null;
 

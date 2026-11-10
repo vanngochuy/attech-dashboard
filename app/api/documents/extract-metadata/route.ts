@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { PDFDocument } from 'pdf-lib';
 import { cleanEnv } from '@/lib/supabase';
+import { executeWithGeminiKeyRotation, getAllGeminiApiKeys } from '@/lib/gemini-keys';
 
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
   try {
-    const apiKey = cleanEnv(process.env.GEMINI_API_KEY);
-    if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY') {
+    const keys = getAllGeminiApiKeys();
+    if (keys.length === 0) {
       return NextResponse.json(
         {
           error: 'Chưa cấu hình GEMINI_API_KEY hợp lệ trong file .env.local. Hãy bổ sung API key của bạn để sử dụng tính năng AI trích xuất thông tin tự động.'
@@ -110,9 +111,6 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) của tài liệu đính k
    - "KE_HOACH" (Kế hoạch công tác, kế hoạch bảo dưỡng)
    - "SO_NHAT_KY" (Sổ nhật ký đài trạm)`;
 
-    // Gọi Gemini REST API với model gemini-3.5-flash-lite (tốc độ phản hồi cực nhanh ~1 giây)
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
-
     const geminiPayload = {
       contents: [
         {
@@ -170,22 +168,23 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) của tài liệu đính k
       },
     };
 
-    const geminiRes = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(geminiPayload),
+    // Gọi Gemini REST API qua pool xoay vòng key tự động (Failover nếu gặp 429 Rate Limit)
+    const geminiData = await executeWithGeminiKeyRotation(async (key) => {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${key}`;
+      const res = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(geminiPayload),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Lỗi phản hồi từ Gemini API (${res.status}): ${errText}`);
+      }
+
+      return await res.json();
     });
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error('Gemini API Error:', errText);
-      return NextResponse.json(
-        { error: 'Lỗi phản hồi từ Gemini API (' + geminiRes.status + '): ' + errText },
-        { status: geminiRes.status }
-      );
-    }
-
-    const geminiData = await geminiRes.json();
     const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!rawText) {
