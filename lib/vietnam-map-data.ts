@@ -13,7 +13,7 @@ export interface StationMapPoint {
   coordStr: string;
   x: number;
   y: number;
-  status: 'active' | 'warning' | 'alert' | 'highlight';
+  status: 'active';
   special?: boolean;
   region: 'Miền Bắc' | 'Miền Trung' | 'Miền Nam' | 'Tây Nguyên' | 'Hải đảo';
 }
@@ -55,10 +55,23 @@ export const NATIONWIDE_STATIONS: StationMapPoint[] = [
     "lat": 21.3735,
     "lng": 103.0079,
     "coordStr": "21°22'24.6\"N 103°00'28.4\"E",
-    "status": "warning",
+    "status": "active",
     "region": "Miền Bắc",
     "x": 86.9,
     "y": 90.9
+  },
+  {
+    "code": "VPH",
+    "name": "Đài DVOR/DME Đầu Tây Nội Bài",
+    "shortName": "Đầu Tây Nội Bài",
+    "type": "DVOR/DME",
+    "lat": 21.276,
+    "lng": 105.6012,
+    "coordStr": "21°16'33.6\"N 105°36'04.3\"E",
+    "status": "active",
+    "region": "Miền Bắc",
+    "x": 178.5,
+    "y": 94.0
   },
   {
     "code": "NOB",
@@ -68,10 +81,10 @@ export const NATIONWIDE_STATIONS: StationMapPoint[] = [
     "lat": 21.213,
     "lng": 105.8349,
     "coordStr": "21°12'46.8\"N 105°50'05.7\"E",
-    "status": "alert",
+    "status": "active",
     "region": "Miền Bắc",
-    "x": 193.7,
-    "y": 97.7
+    "x": 196.5,
+    "y": 98.5
   },
   {
     "code": "CBI",
@@ -211,7 +224,7 @@ export const NATIONWIDE_STATIONS: StationMapPoint[] = [
     "lat": 13.9572,
     "lng": 109.0427,
     "coordStr": "13°57'26.1\"N 109°02'33.6\"E",
-    "status": "warning",
+    "status": "active",
     "region": "Miền Trung",
     "x": 314.8,
     "y": 407.3
@@ -224,8 +237,7 @@ export const NATIONWIDE_STATIONS: StationMapPoint[] = [
     "lat": 13.0262,
     "lng": 109.321,
     "coordStr": "13°01'34.2\"N 109°19'15.5\"E",
-    "status": "highlight",
-    "special": true,
+    "status": "active",
     "region": "Miền Trung",
     "x": 325.3,
     "y": 447.0
@@ -281,6 +293,19 @@ export const NATIONWIDE_STATIONS: StationMapPoint[] = [
     "region": "Miền Nam",
     "x": 278.2,
     "y": 536.5
+  },
+  {
+    "code": "LKN",
+    "name": "Đài NDB Long Khánh",
+    "shortName": "Long Khánh",
+    "type": "NDB",
+    "lat": 10.9474,
+    "lng": 107.2093,
+    "coordStr": "10°56'50.5\"N 107°12'33.6\"E",
+    "status": "active",
+    "region": "Miền Nam",
+    "x": 245.4,
+    "y": 535.7
   },
   {
     "code": "LTH",

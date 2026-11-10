@@ -488,7 +488,7 @@ function AttechLoginGate({
           </div>
 
           <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
-            Hệ thống Quản lý Văn bản Pháp quy, Kỹ thuật CNS/ATM &amp; Bản đồ Mạng lưới Đài trạm Dẫn đường Toàn quốc (CV 1726/KTQLB-KTATCL).
+            Hệ thống Quản lý Văn bản Pháp quy, Kỹ thuật CNS/ATM &amp; Bản đồ Mạng lưới Đài trạm Dẫn đường Toàn quốc.
           </p>
         </div>
 
@@ -523,9 +523,10 @@ function AttechLoginGate({
       </div>
 
       {/* Cột phải: Bảng Điều khiển Đăng nhập (Light Theme Sáng & Sang trọng) */}
-      <div className="w-full lg:w-[460px] bg-white text-slate-900 flex flex-col justify-center p-8 lg:p-10 shadow-2xl relative z-20">
-        <div className="max-w-sm mx-auto w-full space-y-6">
-          <div>
+      <div className="w-full lg:w-[460px] bg-white text-slate-900 flex flex-col justify-start pt-8 lg:pt-14 p-8 lg:p-10 shadow-2xl relative z-20 overflow-y-auto">
+        <div className="max-w-sm mx-auto w-full space-y-5">
+          {/* PHẦN NỘI DUNG CHUNG CỐ ĐỊNH (CHÀO MỪNG ĐẾN VỚI ATTECH...) */}
+          <div className="shrink-0">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-50 border border-sky-200 text-sky-700 text-[11px] font-semibold mb-2">
               <Sparkles className="w-3 h-3 text-sky-600" />
               <span>Cổng Truy Cập Hệ Thống</span>

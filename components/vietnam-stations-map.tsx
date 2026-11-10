@@ -6,7 +6,7 @@ import {
   NATIONWIDE_STATIONS,
   type StationMapPoint,
 } from '@/lib/vietnam-map-data';
-import { Radio, MapPin, CheckCircle2, Compass, ShieldAlert, Sparkles } from 'lucide-react';
+import { MapPin, CheckCircle2 } from 'lucide-react';
 
 interface VietnamStationsMapProps {
   activeStation?: string;
@@ -20,14 +20,6 @@ export function VietnamStationsMap({
   className = '',
 }: VietnamStationsMapProps) {
   const [hoveredStation, setHoveredStation] = useState<StationMapPoint | null>(null);
-
-  // Status color helpers
-  const getDotColor = (station: StationMapPoint) => {
-    if (station.code === 'TUH') return 'bg-amber-400 text-amber-300 ring-amber-400';
-    if (station.status === 'alert') return 'bg-rose-500 text-rose-300 ring-rose-400';
-    if (station.status === 'warning') return 'bg-amber-500 text-amber-300 ring-amber-400';
-    return 'bg-emerald-400 text-emerald-300 ring-emerald-400';
-  };
 
   const isSelected = (station: StationMapPoint) => {
     return activeStation === station.name || activeStation.includes(station.shortName);
@@ -71,8 +63,8 @@ export function VietnamStationsMap({
         />
       </div>
 
-      {/* Top Header bar with status badge */}
-      <div className="relative z-10 px-4 pt-3 pb-1 flex items-center justify-between text-xs border-b border-sky-500/20 bg-slate-950/40 backdrop-blur-md">
+      {/* Top Header bar */}
+      <div className="relative z-10 px-4 pt-3 pb-2 flex items-center justify-between text-xs border-b border-sky-500/20 bg-slate-950/40 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -81,16 +73,6 @@ export function VietnamStationsMap({
           <span className="font-mono text-[11px] font-semibold tracking-wider text-sky-300 uppercase">
             HỆ THỐNG ĐÀI TRẠM CNS/ATM TOÀN QUỐC
           </span>
-          <span className="hidden sm:inline-block text-[10px] text-slate-400 font-mono">
-            (CV 1726/KTQLB-KTATCL)
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-300 text-[10px] font-medium">
-            <Sparkles className="w-3 h-3 text-amber-400" />
-            <span>TUH: Tuy Hòa (Active)</span>
-          </div>
         </div>
       </div>
 
@@ -117,13 +99,6 @@ export function VietnamStationsMap({
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
-
-            {/* Tuy Hoa radar beacon pulse filter */}
-            <radialGradient id="tuyHoaBeacon" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.9" />
-              <stop offset="50%" stopColor="#fbbf24" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
-            </radialGradient>
           </defs>
 
           {/* Graticule grid text markers */}
@@ -220,7 +195,7 @@ export function VietnamStationsMap({
 
           {/* Flight corridors / Navaid airways (tactical dotted lines) */}
           <g stroke="#38bdf8" strokeWidth="0.8" strokeDasharray="2 3" opacity="0.3">
-            <line x1="194" y1="98" x2="283" y2="318" /> {/* NOB - DAN */}
+            <line x1="196" y1="98" x2="283" y2="318" /> {/* NOB - DAN */}
             <line x1="283" y1="318" x2="325" y2="447" /> {/* DAN - TUH */}
             <line x1="325" y1="447" x2="225" y2="541" /> {/* TUH - TSN */}
             <line x1="225" y1="541" x2="126" y2="569" /> {/* TSN - PQU */}
@@ -228,34 +203,15 @@ export function VietnamStationsMap({
             <line x1="225" y1="541" x2="424" y2="634" /> {/* TSN - TSL */}
           </g>
 
-          {/* TUY HOA (TUH) SPECIAL PULSING BEACON */}
-          <g>
-            <circle
-              cx="325.3"
-              cy="447.0"
-              r="26"
-              fill="url(#tuyHoaBeacon)"
-              className="animate-ping pointer-events-none"
-              style={{ animationDuration: '3s' }}
-            />
-            <circle
-              cx="325.3"
-              cy="447.0"
-              r="14"
-              fill="none"
-              stroke="#f59e0b"
-              strokeWidth="1.5"
-              strokeDasharray="3 2"
-              className="pointer-events-none"
-              style={{ animation: 'spin 12s linear infinite' }}
-            />
-          </g>
-
-          {/* Plot all Nationwide Stations */}
+          {/* Plot all Nationwide Stations in UNIFIED GREEN THEME */}
           {NATIONWIDE_STATIONS.map((st) => {
             const selected = isSelected(st);
             const isHovered = hoveredStation?.code === st.code;
-            const isTuyHoa = st.code === 'TUH';
+            const isVPH = st.code === 'VPH';
+
+            // Position VPH badge to the left of its dot, others to the right
+            const badgeOffsetX = isVPH ? st.x - 32 : st.x + 6;
+            const badgeOffsetY = st.y - 7;
 
             return (
               <g
@@ -265,83 +221,58 @@ export function VietnamStationsMap({
                 onMouseLeave={() => setHoveredStation(null)}
                 onClick={() => onSelectStation && onSelectStation(st.name)}
               >
-                {/* Outer halo when active/hovered */}
-                {(selected || isHovered || isTuyHoa) && (
+                {/* Active halo ring when selected or hovered */}
+                {(selected || isHovered) && (
                   <circle
                     cx={st.x}
                     cy={st.y}
-                    r={isTuyHoa ? 10 : 8}
+                    r={9}
                     fill="none"
-                    stroke={isTuyHoa ? '#fbbf24' : selected ? '#38bdf8' : '#34d399'}
+                    stroke="#10b981"
                     strokeWidth="1.8"
                     className="animate-pulse"
                   />
                 )}
 
-                {/* Central beacon dot */}
+                {/* Central beacon dot: Tất cả đài trạm màu xanh (Emerald) */}
                 <circle
                   cx={st.x}
                   cy={st.y}
-                  r={isTuyHoa ? 4.5 : 3.5}
-                  fill={
-                    isTuyHoa
-                      ? '#fbbf24'
-                      : st.status === 'alert'
-                      ? '#ef4444'
-                      : st.status === 'warning'
-                      ? '#f59e0b'
-                      : '#10b981'
-                  }
+                  r={selected ? 4.5 : 3.5}
+                  fill="#10b981"
                   stroke="#ffffff"
-                  strokeWidth={isTuyHoa ? 1.5 : 1}
-                  className="filter drop-shadow-[0_0_6px_currentColor]"
+                  strokeWidth={selected ? 1.5 : 1}
+                  className="filter drop-shadow-[0_0_6px_#10b981]"
                 />
 
                 {/* Badge Container (3-letter Station Code) */}
                 <g
-                  transform={`translate(${st.x + 6}, ${st.y - 7})`}
+                  transform={`translate(${badgeOffsetX}, ${badgeOffsetY})`}
                   className="transition-transform duration-150"
                   style={{
-                    transform: isHovered || selected ? `translate(${st.x + 7}px, ${st.y - 8}px) scale(1.1)` : undefined,
+                    transform:
+                      isHovered || selected
+                        ? `translate(${badgeOffsetX + (isVPH ? -1 : 1)}px, ${badgeOffsetY - 1}px) scale(1.08)`
+                        : undefined,
                   }}
                 >
                   <rect
                     x="0"
                     y="0"
-                    width={isTuyHoa ? 34 : 28}
+                    width={st.code.length > 3 ? 34 : 28}
                     height="14"
                     rx="3"
-                    fill={
-                      isTuyHoa
-                        ? '#78350f'
-                        : selected
-                        ? '#0369a1'
-                        : '#090d16'
-                    }
-                    fillOpacity={selected || isTuyHoa ? 0.95 : 0.85}
-                    stroke={
-                      isTuyHoa
-                        ? '#fbbf24'
-                        : selected
-                        ? '#38bdf8'
-                        : st.status === 'alert'
-                        ? '#ef4444'
-                        : st.status === 'warning'
-                        ? '#f59e0b'
-                        : '#334155'
-                    }
-                    strokeWidth={selected || isTuyHoa ? '1.5' : '0.8'}
+                    fill={selected ? '#065f46' : '#051815'}
+                    fillOpacity={0.92}
+                    stroke={selected ? '#34d399' : '#059669'}
+                    strokeWidth={selected ? '1.5' : '0.9'}
                   />
                   <text
-                    x={isTuyHoa ? 17 : 14}
+                    x={st.code.length > 3 ? 17 : 14}
                     y="10.5"
                     textAnchor="middle"
                     className={`font-mono text-[9px] font-bold ${
-                      isTuyHoa
-                        ? 'fill-amber-300'
-                        : selected
-                        ? 'fill-sky-100'
-                        : 'fill-slate-200'
+                      selected ? 'fill-white' : 'fill-emerald-300'
                     }`}
                   >
                     {st.code}
@@ -355,20 +286,16 @@ export function VietnamStationsMap({
         {/* Hover / Tooltip HUD Card (Flight Ops Display) */}
         {hoveredStation && (
           <div
-            className="absolute top-4 right-4 z-20 w-72 p-3.5 rounded-xl bg-slate-900/95 border border-sky-400/40 shadow-2xl backdrop-blur-md text-white pointer-events-none transition-all duration-200 animate-in fade-in zoom-in-95"
+            className="absolute top-4 right-4 z-20 w-72 p-3.5 rounded-xl bg-slate-900/95 border border-emerald-500/40 shadow-2xl backdrop-blur-md text-white pointer-events-none transition-all duration-200 animate-in fade-in zoom-in-95"
           >
             <div className="flex items-start justify-between gap-2 mb-2">
               <div className="flex items-center gap-2">
-                <span
-                  className={`w-2.5 h-2.5 rounded-full ${getDotColor(
-                    hoveredStation
-                  )} shadow-[0_0_8px_currentColor]`}
-                />
-                <h4 className="font-bold text-sm text-sky-200">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
+                <h4 className="font-bold text-sm text-emerald-200">
                   {hoveredStation.shortName} [{hoveredStation.code}]
                 </h4>
               </div>
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-400/30">
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                 {hoveredStation.region}
               </span>
             </div>
@@ -380,7 +307,7 @@ export function VietnamStationsMap({
             <div className="space-y-1.5 text-[11px] font-mono border-t border-slate-700/60 pt-2 text-slate-300">
               <div className="flex justify-between">
                 <span className="text-slate-400">Tọa độ (WGS-84):</span>
-                <span className="text-sky-300">{hoveredStation.coordStr}</span>
+                <span className="text-emerald-300">{hoveredStation.coordStr}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Trang thiết bị:</span>
@@ -394,34 +321,30 @@ export function VietnamStationsMap({
               </div>
             </div>
 
-            <div className="mt-2.5 pt-2 border-t border-slate-700/40 flex items-center justify-between text-[10px] text-sky-400/80">
+            <div className="mt-2.5 pt-2 border-t border-slate-700/40 flex items-center justify-between text-[10px] text-emerald-400/80">
               <span>Bấm đài trạm để chọn đăng nhập</span>
-              <span className="font-mono">CV 1726/KTQLB</span>
+              <span className="font-mono">ATTECH CNS/ATM</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Bottom Bar: Selection Status & Quick Actions */}
+      {/* Bottom Bar: Selection Status */}
       <div className="relative z-10 px-4 py-2.5 bg-slate-950/60 border-t border-sky-500/20 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-2">
-          <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
           <span className="text-slate-300 text-[11px]">
             Đài đang chọn:{' '}
-            <strong className="text-amber-300 font-bold">{activeStation}</strong>
+            <strong className="text-emerald-300 font-bold">{activeStation}</strong>
           </span>
         </div>
 
-        <div className="flex items-center gap-3 text-[10px] text-slate-400 font-mono">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" /> Hoạt động
+        <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-mono">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-amber-400" /> Tuy Hòa (Highlight)
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-rose-400" /> Nội Bài
-          </span>
+          <span className="font-semibold text-emerald-300">Tất cả đài trạm hoạt động 24/7</span>
         </div>
       </div>
     </div>
