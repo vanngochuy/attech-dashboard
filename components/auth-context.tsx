@@ -405,7 +405,7 @@ function AttechLoginGate({
       return;
     }
     if (!staffPin.trim()) {
-      setError('Vui lòng nhập Mật khẩu truy cập (mặc định: 1234).');
+      setError('Vui lòng nhập Mật khẩu truy cập.');
       return;
     }
     setIsSubmitting(true);
@@ -602,23 +602,7 @@ function AttechLoginGate({
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Tài khoản hoặc Email cán bộ <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={staffIdentity}
-                  onChange={(e) => {
-                    setStaffIdentity(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder="VD: huyvn, hainh, linhct, hoanglm..."
-                  className="w-full bg-white border border-sky-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-600/15 transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Đơn vị / Đài trạm (CNS / ATM)
+                  Đơn vị / Đài trạm CNS
                 </label>
                 <select
                   value={staffDept}
@@ -635,6 +619,22 @@ function AttechLoginGate({
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Tài khoản hoặc Email cán bộ <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={staffIdentity}
+                  onChange={(e) => {
+                    setStaffIdentity(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="Nhập tài khoản hoặc email cán bộ..."
+                  className="w-full bg-white border border-sky-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-600/15 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Mật khẩu truy cập <span className="text-rose-500">*</span>
                 </label>
                 <input
@@ -644,7 +644,7 @@ function AttechLoginGate({
                     setStaffPin(e.target.value);
                     setError(null);
                   }}
-                  placeholder="Nhập mật khẩu (Mặc định: 1234)..."
+                  placeholder="Nhập mật khẩu truy cập..."
                   className="w-full bg-white border border-sky-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-600/15 transition-all"
                 />
               </div>

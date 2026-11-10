@@ -1,12 +1,22 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   VIETNAM_MAP_PATHS,
   NATIONWIDE_STATIONS,
   type StationMapPoint,
 } from '@/lib/vietnam-map-data';
-import { MapPin, CheckCircle2 } from 'lucide-react';
+import { MapPin, CheckCircle2, Activity, Server, AlertTriangle } from 'lucide-react';
+
+interface StationLiveInfo {
+  code: string;
+  online: boolean;
+  deviceCount: number;
+  alarmsCount: number;
+  status: 'active' | 'warning' | 'alert';
+  lastUpdated: string;
+  source: 'sirms' | 'standby';
+}
 
 interface VietnamStationsMapProps {
   activeStation?: string;
@@ -20,9 +30,53 @@ export function VietnamStationsMap({
   className = '',
 }: VietnamStationsMapProps) {
   const [hoveredStation, setHoveredStation] = useState<StationMapPoint | null>(null);
+  const [liveStatuses, setLiveStatuses] = useState<Record<string, StationLiveInfo>>({});
+  const [isSirmsConnected, setIsSirmsConnected] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
+
+  // Fetch Live Status from /api/stations/live-status (SIRMS feed)
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadLiveStatus() {
+      try {
+        const res = await fetch('/api/stations/live-status', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.ok && isMounted) {
+          setIsSirmsConnected(data.connected === true);
+          if (data.statuses) {
+            setLiveStatuses(data.statuses);
+          }
+          if (data.generatedAt) {
+            try {
+              const dt = new Date(data.generatedAt);
+              setLastSyncTime(dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+            } catch {
+              setLastSyncTime('Mới cập nhật');
+            }
+          }
+        }
+      } catch (err) {
+        // Fallback silently if offline
+      }
+    }
+
+    loadLiveStatus();
+    const interval = setInterval(loadLiveStatus, 45000); // 45s refresh
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const isSelected = (station: StationMapPoint) => {
     return activeStation === station.name || activeStation.includes(station.shortName);
+  };
+
+  const getStationLiveData = (code: string): StationLiveInfo | undefined => {
+    return liveStatuses[code];
   };
 
   return (
@@ -30,7 +84,7 @@ export function VietnamStationsMap({
       className={`relative w-full h-full flex flex-col select-none ${className}`}
       style={{ minHeight: '520px' }}
     >
-      {/* Tactical radar & grid background */}
+      {/* Tactical radar & grid background (No rotating sweep beam) */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl bg-gradient-to-b from-slate-950/70 via-sky-950/30 to-slate-950/80 border border-sky-500/20 shadow-2xl backdrop-blur-xs">
         {/* Radar concentric range rings */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[620px] h-[620px] rounded-full border border-sky-500/10" />
@@ -41,8 +95,6 @@ export function VietnamStationsMap({
         {/* Radar crosshairs & angular bearings */}
         <div className="absolute top-0 bottom-0 left-1/2 w-px bg-gradient-to-b from-transparent via-sky-500/15 to-transparent" />
         <div className="absolute left-0 right-0 top-1/2 h-px bg-gradient-to-r from-transparent via-sky-500/15 to-transparent" />
-
-
 
         {/* Subtle grid lines */}
         <div
@@ -55,7 +107,7 @@ export function VietnamStationsMap({
         />
       </div>
 
-      {/* Top Header bar */}
+      {/* Top Header bar with SIRMS Live Status */}
       <div className="relative z-10 px-4 pt-3 pb-2 flex items-center justify-between text-xs border-b border-sky-500/20 bg-slate-950/40 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
@@ -65,6 +117,25 @@ export function VietnamStationsMap({
           <span className="font-mono text-[11px] font-semibold tracking-wider text-sky-300 uppercase">
             HỆ THỐNG ĐÀI TRẠM CNS/ATM TOÀN QUỐC
           </span>
+        </div>
+
+        {/* SIRMS Live Feed status badge */}
+        <div className="flex items-center gap-2 font-mono text-[10px]">
+          <span
+            className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 transition-colors ${
+              isSirmsConnected
+                ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-300'
+                : 'bg-sky-500/15 border-sky-400/30 text-sky-300'
+            }`}
+          >
+            <Activity className="w-3 h-3 animate-pulse text-emerald-400" />
+            <span>{isSirmsConnected ? 'SIRMS LIVE STATUS' : 'GIÁM SÁT 24/7'}</span>
+          </span>
+          {lastSyncTime && (
+            <span className="text-slate-400 hidden sm:inline-block">
+              {lastSyncTime}
+            </span>
+          )}
         </div>
       </div>
 
@@ -200,6 +271,7 @@ export function VietnamStationsMap({
             const selected = isSelected(st);
             const isHovered = hoveredStation?.code === st.code;
             const isVPH = st.code === 'VPH';
+            const liveData = getStationLiveData(st.code);
 
             // Position VPH badge to the left of its dot, others to the right
             const badgeOffsetX = isVPH ? st.x - 32 : st.x + 6;
@@ -275,7 +347,7 @@ export function VietnamStationsMap({
           })}
         </svg>
 
-        {/* Hover / Tooltip HUD Card (Flight Ops Display) */}
+        {/* Hover / Tooltip HUD Card (Flight Ops & SIRMS SNMP Live Status) */}
         {hoveredStation && (
           <div
             className="absolute top-4 right-4 z-20 w-72 p-3.5 rounded-xl bg-slate-900/95 border border-emerald-500/40 shadow-2xl backdrop-blur-md text-white pointer-events-none transition-all duration-200 animate-in fade-in zoom-in-95"
@@ -302,20 +374,35 @@ export function VietnamStationsMap({
                 <span className="text-emerald-300">{hoveredStation.coordStr}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Trang thiết bị:</span>
+                <span className="text-slate-400">Loại đài dẫn đường:</span>
                 <span className="text-emerald-300 font-semibold">{hoveredStation.type}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Vận hành:</span>
-                <span className="text-emerald-400 flex items-center gap-1 font-sans">
+                <span className="text-slate-400">Trạng thái phát sóng:</span>
+                <span className="text-emerald-400 flex items-center gap-1 font-sans font-medium">
                   <CheckCircle2 className="w-3 h-3" /> Sẵn sàng 24/7
                 </span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Giám sát SIRMS:</span>
+                <span className="text-sky-300 flex items-center gap-1 font-sans">
+                  <Server className="w-3 h-3 text-sky-400" />
+                  {isSirmsConnected ? 'Live SNMP Feed' : 'Hệ thống Trực tuyến'}
+                </span>
+              </div>
+              {getStationLiveData(hoveredStation.code)?.deviceCount ? (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Thiết bị giám sát:</span>
+                  <span className="text-emerald-300">
+                    {getStationLiveData(hoveredStation.code)?.deviceCount} thiết bị
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-2.5 pt-2 border-t border-slate-700/40 flex items-center justify-between text-[10px] text-emerald-400/80">
               <span>Bấm đài trạm để chọn đăng nhập</span>
-              <span className="font-mono">ATTECH CNS/ATM</span>
+              <span className="font-mono">ATTECH SIRMS</span>
             </div>
           </div>
         )}
@@ -336,7 +423,9 @@ export function VietnamStationsMap({
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
-          <span className="font-semibold text-emerald-300">Tất cả đài trạm hoạt động 24/7</span>
+          <span className="font-semibold text-emerald-300">
+            Hệ thống 31 Đài trạm CNS/ATM sẵn sàng 24/7
+          </span>
         </div>
       </div>
     </div>
