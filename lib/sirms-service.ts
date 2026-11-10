@@ -200,14 +200,64 @@ export function parseSirmsStationsToMap(
     };
 
     if (rawCode) result[rawCode] = info;
-    // Map with known codes
-    const knownCodes = ['TUH', 'NOB', 'DAN', 'TSN', 'CBI', 'VPH', 'DBN', 'VDO', 'NAH', 'THX', 'VIN', 'DOH', 'HUE', 'CLA', 'PLK', 'PCA', 'BMT', 'CAR', 'LKH', 'PTH', 'LTH', 'CAN', 'RGI', 'PQU', 'CMA', 'DMU', 'CSN', 'STT', 'TSL', 'LKN'];
-    for (const kc of knownCodes) {
-      if (rawName.includes(kc) || rawCode.includes(kc)) {
-        result[kc] = { ...info, code: kc };
+
+    // Code aliases between SIRMS and Dashboard
+    const codeAliases: Record<string, string[]> = {
+      TSH: ['TSN'],
+      TSN: ['TSH'],
+      TRN: ['CAN'],
+      CAN: ['TRN'],
+      AC: ['LKN'],
+      LKN: ['AC'],
+    };
+
+    if (codeAliases[rawCode]) {
+      for (const alias of codeAliases[rawCode]) {
+        result[alias] = { ...info, code: alias };
+      }
+    }
+
+    // Name-based matching fallback
+    const nameMap: Record<string, string> = {
+      'NỘI BÀI': 'NOB',
+      'ĐẦU TÂY NỘI BÀI': 'VPH',
+      'CÁT BI': 'CBI',
+      'VÂN ĐỒN': 'VDO',
+      'ĐIỆN BIÊN': 'DBN',
+      'ĐỒNG HỚI': 'DOH',
+      'NAM HÀ': 'NAH',
+      'VINH': 'VIN',
+      'THỌ XUÂN': 'THX',
+      'PHÚ BÀI': 'HUE',
+      'ĐÀ NẴNG': 'DAN',
+      'PLEIKU': 'PLK',
+      'PHÙ CÁT': 'PCA',
+      'CHU LAI': 'CLA',
+      'BUÔN MA THUỘT': 'BMT',
+      'CAM RANH': 'CAR',
+      'LIÊN KHƯƠNG': 'LKH',
+      'TÂN SƠN NHẤT': 'TSN',
+      'CẦN THƠ': 'CAN',
+      'RẠCH GIÁ': 'RGI',
+      'TUY HÒA': 'TUH',
+      'CÔN SƠN': 'CSN',
+      'PHÚ QUỐC': 'PQU',
+      'LONG KHÁNH': 'LKN',
+      'PHAN THIẾT': 'PTH',
+      'TRƯỜNG SA LỚN': 'TSL',
+      'SONG TỬ TÂY': 'STT',
+      'ĐẤT MŨI': 'DMU',
+      'LONG THÀNH': 'LTH',
+      'CÀ MAU': 'CMA',
+    };
+
+    for (const [vnName, code] of Object.entries(nameMap)) {
+      if (rawName.includes(vnName)) {
+        result[code] = { ...info, code };
       }
     }
   }
 
   return result;
 }
+
