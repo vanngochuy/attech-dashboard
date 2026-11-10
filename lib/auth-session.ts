@@ -3,6 +3,7 @@ export type AuthRole = 'admin' | 'user';
 export interface AuthSessionPayload {
   role: AuthRole;
   username: string;
+  departmentScope?: string;
   iat: number;
   exp: number;
 }
@@ -60,12 +61,14 @@ async function getCryptoKey(secret: string): Promise<CryptoKey> {
 export async function signAuthSession(
   role: AuthRole,
   username: string,
+  departmentScope = 'ALL',
   durationSeconds = SESSION_DURATION_SECONDS
 ): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const payload: AuthSessionPayload = {
     role,
     username,
+    departmentScope: role === 'admin' ? 'ALL' : departmentScope || 'ALL',
     iat: now,
     exp: now + durationSeconds,
   };

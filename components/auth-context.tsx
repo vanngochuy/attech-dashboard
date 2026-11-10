@@ -28,8 +28,13 @@ interface AuthContextValue {
   isAdmin: boolean;
   isAuthenticated: boolean;
   username: string | null;
+  departmentScope: string;
   loginAdmin: (user: string, pass: string) => Promise<{ ok: boolean; error?: string }>;
-  loginAsUser: (pin: string, identity?: string) => Promise<{ ok: boolean; error?: string }>;
+  loginAsUser: (
+    pin: string,
+    identity?: string,
+    departmentScope?: string
+  ) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -376,11 +381,16 @@ function AttechLoginGate({
   onUserLogin,
 }: {
   onAdminLogin: (u: string, p: string) => Promise<{ ok: boolean; error?: string }>;
-  onUserLogin: (pin: string, identity?: string) => Promise<{ ok: boolean; error?: string }>;
+  onUserLogin: (
+    pin: string,
+    identity?: string,
+    departmentScope?: string
+  ) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [loginTab, setLoginTab] = useState<'staff' | 'admin'>('staff');
   const [staffPin, setStaffPin] = useState('');
   const [staffIdentity, setStaffIdentity] = useState('');
+  const [staffDept, setStaffDept] = useState('ALL');
   const [inputUser, setInputUser] = useState('');
   const [inputPass, setInputPass] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -388,6 +398,10 @@ function AttechLoginGate({
 
   const handleStaffSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!staffIdentity.trim()) {
+      setError('Vui lòng nhập Email công ty (@attech.com.vn) hoặc Họ tên cán bộ để ghi nhận truy cập.');
+      return;
+    }
     if (!staffPin.trim()) {
       setError('Vui lòng nhập Mã truy cập nội bộ ATTECH (PIN) để mở khóa tra cứu.');
       return;
@@ -395,7 +409,7 @@ function AttechLoginGate({
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await onUserLogin(staffPin, staffIdentity);
+      const res = await onUserLogin(staffPin, staffIdentity, staffDept);
       if (!res.ok) {
         setError(res.error || 'Mã truy cập nội bộ không chính xác.');
       }
@@ -657,20 +671,44 @@ function AttechLoginGate({
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Họ tên hoặc Email @attech.com.vn (Tùy chọn)
+                  Email công ty (@attech.com.vn) hoặc Họ tên <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={staffIdentity}
-                  onChange={(e) => setStaffIdentity(e.target.value)}
-                  placeholder="VD: Nguyễn Văn A / anv@attech.com.vn"
+                  onChange={(e) => {
+                    setStaffIdentity(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="VD: tuh@attech.com.vn / Nguyễn Văn A"
                   className="w-full bg-white border border-sky-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-600/15 transition-all"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Mã truy cập nội bộ (PIN Công ty) <span className="text-rose-500">*</span>
+                  Phòng ban / Đơn vị chuyên môn (Phân quyền RLS)
+                </label>
+                <select
+                  value={staffDept}
+                  onChange={(e) => setStaffDept(e.target.value)}
+                  className="w-full bg-white border border-sky-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-600/15 transition-all"
+                >
+                  <option value="ALL">Toàn công ty (Tra cứu tất cả chuyên ngành)</option>
+                  <option value="CNS">CNS (Thông tin - Dẫn đường - Giám sát)</option>
+                  <option value="QL_KY_THUAT">Quản lý Kỹ thuật (QLKT)</option>
+                  <option value="SMS">An toàn Hàng không (SMS)</option>
+                  <option value="CONG_TRINH_HK">Công trình Hàng không (CTHK)</option>
+                  <option value="CANG_HK">Cảng Hàng không (CHK)</option>
+                  <option value="QL_DAU_TU">Quản lý Đầu tư</option>
+                  <option value="QTCL">Quản lý Chất lượng (QTCL)</option>
+                  <option value="VB_PHAP_LUAT">Văn bản Pháp luật &amp; Quy chế</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Mã truy cập nội bộ (PIN Công ty / Mật khẩu) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="password"
@@ -755,6 +793,7 @@ function AttechLoginGate({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [departmentScope, setDepartmentScope] = useState<string>('ALL');
   const [isHydrated, setIsHydrated] = useState(false);
   const [flightPhase, setFlightPhase] = useState<FlightPhase>('idle');
   const [pendingRole, setPendingRole] = useState<UserRole>(null);
@@ -774,6 +813,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mounted && data?.authenticated && (data.role === 'admin' || data.role === 'user')) {
             setRole(data.role);
             setUsername(data.username || (data.role === 'admin' ? 'Admin' : 'Nhân viên ATTECH'));
+            setDepartmentScope(data.departmentScope || 'ALL');
           }
         }
       } catch {
@@ -788,9 +828,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const triggerTakeoff = (targetRole: 'admin' | 'user', targetName: string) => {
+  const triggerTakeoff = (targetRole: 'admin' | 'user', targetName: string, dept = 'ALL') => {
     setPendingRole(targetRole);
     setUsername(targetName);
+    setDepartmentScope(dept);
     setFlightPhase('takeoff');
 
     setTimeout(() => {
@@ -818,7 +859,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok || !data?.success) {
         return { ok: false, error: data?.error || 'Tài khoản hoặc mật khẩu không chính xác.' };
       }
-      triggerTakeoff('admin', data.username || user.trim());
+      triggerTakeoff('admin', data.username || user.trim(), 'ALL');
       return { ok: true };
     } catch {
       return { ok: false, error: 'Không thể kết nối máy chủ xác thực.' };
@@ -827,7 +868,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginAsUser = async (
     pin: string,
-    identity?: string
+    identity?: string,
+    deptScope = 'ALL'
   ): Promise<{ ok: boolean; error?: string }> => {
     try {
       const res = await fetch('/api/auth/login', {
@@ -838,13 +880,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           mode: 'user',
           pin,
           identity: identity?.trim() || 'Nhân viên ATTECH',
+          departmentScope: deptScope,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data?.success) {
         return { ok: false, error: data?.error || 'Mã truy cập nội bộ (PIN) không chính xác.' };
       }
-      triggerTakeoff('user', data.username || 'Nhân viên ATTECH');
+      triggerTakeoff('user', data.username || 'Nhân viên ATTECH', data.departmentScope || deptScope);
       return { ok: true };
     } catch {
       return { ok: false, error: 'Không thể kết nối máy chủ xác thực.' };
@@ -864,6 +907,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRole(null);
       setPendingRole(null);
       setUsername(null);
+      setDepartmentScope('ALL');
       setFlightPhase('idle');
     }, ANIMATION_DURATION_MS);
   };
@@ -880,6 +924,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAdmin: role === 'admin',
         isAuthenticated: role !== null,
         username,
+        departmentScope,
         loginAdmin,
         loginAsUser,
         logout,

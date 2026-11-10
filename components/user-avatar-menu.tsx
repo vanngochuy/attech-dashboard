@@ -3,18 +3,37 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  User,
   Camera,
   Trash2,
   CheckCircle2,
   PlaneLanding,
   Upload,
+  ShieldAlert,
+  X,
+  RefreshCw,
+  Loader2,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from './auth-context';
 import { useTheme } from './theme-context';
 
+interface AuditLogItem {
+  id: string;
+  timestamp: string;
+  username: string;
+  role: 'admin' | 'user' | 'anonymous';
+  department?: string;
+  action: string;
+  targetId?: string;
+  targetTitle?: string;
+  ip: string;
+  userAgent: string;
+  deviceLabel: string;
+  details?: string;
+}
+
 export default function UserAvatarMenu() {
-  const { isAdmin, username, logout } = useAuth();
+  const { isAdmin, username, departmentScope, logout } = useAuth();
   const { isDeepAero } = useTheme();
 
   const [mounted, setMounted] = useState(false);
@@ -22,11 +41,15 @@ export default function UserAvatarMenu() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ top: number; right: number }>({ top: 60, right: 24 });
 
+  // Trạng thái Nhật ký Kiểm toán (Audit Log Modal cho Admin)
+  const [isAuditOpen, setIsAuditOpen] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [isLoadingAudit, setIsLoadingAudit] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Đảm bảo an toàn SSR
   useEffect(() => {
     setMounted(true);
     try {
@@ -37,7 +60,27 @@ export default function UserAvatarMenu() {
     }
   }, []);
 
-  // Tính toán vị trí của popover ngay sát dưới nút Avatar
+  const fetchAuditLogs = async () => {
+    setIsLoadingAudit(true);
+    try {
+      const res = await fetch('/api/audit/logs', {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.logs)) {
+          setAuditLogs(data.logs);
+        }
+      }
+    } catch {
+      // Ignore
+    } finally {
+      setIsLoadingAudit(false);
+    }
+  };
+
   const updateCoords = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
@@ -53,7 +96,6 @@ export default function UserAvatarMenu() {
     setIsOpen((prev) => !prev);
   };
 
-  // Tự động đóng menu khi bấm ra ngoài hoặc khi resize/scroll
   useEffect(() => {
     if (!isOpen) return;
 
@@ -84,7 +126,6 @@ export default function UserAvatarMenu() {
     };
   }, [isOpen]);
 
-  // Xử lý upload ảnh đại diện mới
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -122,12 +163,58 @@ export default function UserAvatarMenu() {
     }
   };
 
+  const renderActionBadge = (action: string) => {
+    switch (action) {
+      case 'LOGIN_SUCCESS':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            Đăng nhập
+          </span>
+        );
+      case 'LOGIN_FAILED':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+            Sai mật khẩu
+          </span>
+        );
+      case 'VIEW_PDF':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+            Xem / Tải PDF
+          </span>
+        );
+      case 'UPDATE_DOC':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            Sửa văn bản
+          </span>
+        );
+      case 'DELETE_DOC':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+            Xóa văn bản
+          </span>
+        );
+      case 'LOGOUT':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+            Đăng xuất
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+            {action}
+          </span>
+        );
+    }
+  };
+
   const displayName = username || (isAdmin ? 'huyvn' : 'Nhân viên tra cứu');
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <>
-      {/* Input upload file ảnh ẩn */}
       <input
         ref={fileInputRef}
         type="file"
@@ -136,13 +223,12 @@ export default function UserAvatarMenu() {
         onChange={handleFileChange}
       />
 
-      {/* Nút Avatar hình tròn đơn giản */}
       <button
         ref={buttonRef}
         type="button"
         onClick={handleToggle}
         className="relative flex items-center justify-center w-9 h-9 rounded-full cursor-pointer focus:outline-none transition-all active:scale-95 group shrink-0"
-        title={`Tài khoản: ${displayName} (admin)`}
+        title={`Tài khoản: ${displayName} (${isAdmin ? 'admin' : 'user'})`}
         aria-expanded={isOpen}
       >
         {avatarUrl ? (
@@ -163,14 +249,12 @@ export default function UserAvatarMenu() {
           </div>
         )}
 
-        {/* Chấm tròn trạng thái hoạt động */}
         <span
           className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white"
           title="Đang hoạt động"
         />
       </button>
 
-      {/* Popover hiển thị thông tin tài khoản qua Portal để không bao giờ bị overflow-hidden cắt mất */}
       {mounted &&
         isOpen &&
         typeof document !== 'undefined' &&
@@ -189,7 +273,6 @@ export default function UserAvatarMenu() {
                 : 'bg-white/95 backdrop-blur-xl border-slate-200 text-slate-800 shadow-2xl'
             }`}
           >
-            {/* Thông tin User & Avatar lớn kèm nút đổi ảnh */}
             <div className="flex items-center gap-3 pb-3 border-b border-slate-200/40">
               <div className="relative group/avatar shrink-0">
                 {avatarUrl ? (
@@ -210,7 +293,6 @@ export default function UserAvatarMenu() {
                   </div>
                 )}
 
-                {/* Nút camera nhỏ trên avatar để đổi ảnh nhanh */}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -224,9 +306,8 @@ export default function UserAvatarMenu() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="text-sm font-bold truncate">{displayName}</p>
-                  {/* Thay "Toàn quyền quản trị" thành "admin" */}
                   <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-400/30">
-                    admin
+                    {isAdmin ? 'admin' : 'user'}
                   </span>
                 </div>
                 <p
@@ -234,17 +315,35 @@ export default function UserAvatarMenu() {
                     isDeepAero ? 'text-sky-200/70' : 'text-slate-500'
                   }`}
                 >
-                  {isAdmin ? 'tuh@attech.com.vn' : 'user@attech.com.vn'}
+                  Phạm vi: {departmentScope === 'ALL' ? 'Toàn công ty' : departmentScope}
                 </p>
                 <div className="flex items-center gap-1 text-[11px] text-emerald-500 mt-1 font-medium">
                   <CheckCircle2 className="w-3 h-3 shrink-0" />
-                  <span>Hệ thống ATTECH sẵn sàng</span>
+                  <span>Phiên bảo mật HttpOnly</span>
                 </div>
               </div>
             </div>
 
-            {/* Các nút thao tác ảnh đại diện */}
             <div className="py-2.5 border-b border-slate-200/40 space-y-1">
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    setIsAuditOpen(true);
+                    fetchAuditLogs();
+                  }}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    isDeepAero
+                      ? 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-400/30'
+                      : 'bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                  <span>Nhật ký Kiểm toán (Audit Log)</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -274,7 +373,6 @@ export default function UserAvatarMenu() {
               )}
             </div>
 
-            {/* Nút Đăng xuất */}
             <div className="pt-2.5">
               <button
                 type="button"
@@ -291,6 +389,107 @@ export default function UserAvatarMenu() {
                 <PlaneLanding className="w-3.5 h-3.5 shrink-0" />
                 <span>Đăng xuất</span>
               </button>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Modal Nhật ký Kiểm toán Bảo mật (Audit Log) dành cho Admin */}
+      {mounted &&
+        isAuditOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100000] bg-slate-900/65 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-150"
+            onClick={() => setIsAuditOpen(false)}
+          >
+            <div
+              className="bg-white border border-slate-200 rounded-t-3xl sm:rounded-2xl w-full max-w-4xl h-[88dvh] sm:h-[82vh] flex flex-col shadow-2xl overflow-hidden text-slate-800 font-sans"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-sky-600 text-white flex items-center justify-center shadow-xs">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Nhật ký Kiểm toán Bảo mật (Security Audit Log)
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Theo dõi lịch sử đăng nhập, thiết bị/IP, xem văn bản PDF, chỉnh sửa và xóa tài liệu
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={fetchAuditLogs}
+                    disabled={isLoadingAudit}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-xs font-semibold text-slate-700 cursor-pointer"
+                  >
+                    {isLoadingAudit ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
+                    )}
+                    <span>Làm mới</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAuditOpen(false)}
+                    className="p-1.5 rounded-lg bg-slate-200/70 hover:bg-slate-300 text-slate-600 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-100 p-4 space-y-2">
+                {isLoadingAudit ? (
+                  <div className="py-16 flex flex-col items-center justify-center text-slate-500 text-xs gap-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-sky-600" />
+                    <span>Đang tải nhật ký kiểm toán bảo mật...</span>
+                  </div>
+                ) : auditLogs.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-xs">
+                    Chưa có bản ghi kiểm toán nào.
+                  </div>
+                ) : (
+                  auditLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="p-3 rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {renderActionBadge(log.action)}
+                          <span className="font-bold text-slate-900">{log.username}</span>
+                          <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                            {log.role === 'admin' ? 'Admin' : `Phòng: ${log.department || 'ALL'}`}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            • {new Date(log.timestamp).toLocaleString('vi-VN')}
+                          </span>
+                        </div>
+                        {(log.targetTitle || log.details) && (
+                          <div className="text-slate-600 text-[11px] break-words">
+                            {log.targetTitle && (
+                              <strong className="text-slate-800 mr-1.5">[{log.targetTitle}]</strong>
+                            )}
+                            <span>{log.details}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 text-[11px] font-mono text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/70">
+                        <span>{log.deviceLabel}</span>
+                        <span>•</span>
+                        <span>IP: {log.ip}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>,
           document.body

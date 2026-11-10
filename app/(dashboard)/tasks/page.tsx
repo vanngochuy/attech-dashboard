@@ -2002,25 +2002,28 @@ export default function EmailDocumentTasksPage() {
         </div>
       )}
 
-      {/* Modal Xem trước File PDF (Trực tiếp từ Google Drive hoặc Supabase/Email - Hỗ trợ Bottom Sheet trên iPhone) */}
+      {/* Modal Xem trước File PDF (Trực tiếp qua luồng bảo mật ATTECH - Hỗ trợ Bottom Sheet trên iPhone) */}
       {previewItem && (() => {
         const previewUrl = getDraftPreviewUrl(previewItem);
         if (!previewUrl) return null;
         const nativeViewUrl = previewItem.driveFileId
-          ? `https://drive.google.com/file/d/${previewItem.driveFileId}/view`
+          ? `/api/documents/stream/${encodeURIComponent(previewItem.driveFileId)}`
           : previewUrl;
 
         const handleShareDraftPdf = async () => {
+          const shareLink = previewItem.driveFileId
+            ? `${window.location.origin}${nativeViewUrl}`
+            : nativeViewUrl;
           try {
             if (navigator.share) {
               await navigator.share({
                 title: previewItem.extractedTitle,
-                text: `Văn bản ATTECH: ${previewItem.extractedTitle}`,
-                url: nativeViewUrl,
+                text: `Văn bản nội bộ ATTECH (Yêu cầu đăng nhập): ${previewItem.extractedTitle}`,
+                url: shareLink,
               });
             } else {
-              await navigator.clipboard.writeText(nativeViewUrl);
-              showToast('success', 'Đã sao chép link PDF để gửi qua Zalo/Mail!');
+              await navigator.clipboard.writeText(shareLink);
+              showToast('success', 'Đã sao chép đường dẫn bảo mật nội bộ ATTECH!');
             }
           } catch {
             // Người dùng hủy chia sẻ
@@ -2044,8 +2047,8 @@ export default function EmailDocumentTasksPage() {
                   <FileText className="w-4 h-4 text-sky-400 shrink-0" />
                   <span className="text-xs sm:text-sm font-bold truncate">{previewItem.extractedTitle}</span>
                   {previewItem.driveFileId && (
-                    <span className="hidden md:inline font-mono text-[10px] text-sky-200 bg-white/10 px-2 py-0.5 rounded border border-white/20">
-                      Drive ID: {previewItem.driveFileId}
+                    <span className="hidden md:inline font-mono text-[10px] text-emerald-200 bg-white/10 px-2 py-0.5 rounded border border-white/20">
+                      {isAdmin ? `Protected · ${previewItem.driveFileId.slice(0, 10)}...` : 'ATTECH Secure Stream'}
                     </span>
                   )}
                 </div>

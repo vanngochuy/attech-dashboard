@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase';
+import { AUTH_COOKIE_NAME, verifyAuthSession } from '@/lib/auth-session';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +23,10 @@ export async function GET() {
       return NextResponse.json({ configured: false, documents: [] }, { status: 200 });
     }
 
+    const cookieStore = cookies();
+    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+    const session = await verifyAuthSession(token);
+
     const { data, error } = await supabase
       .from('document_files')
       .select('*')
@@ -33,9 +39,28 @@ export async function GET() {
       );
     }
 
+    let docs = data || [];
+
+    // Phân quyền cấp độ dữ liệu (Row-Level Security) theo Phòng ban / Chuyên ngành:
+    // Nếu nhân viên đăng nhập theo 1 chuyên ngành cụ thể (VD: CNS), chỉ trả về văn bản thuộc chuyên ngành đó + Văn bản Pháp luật chung (VB_PHAP_LUAT)
+    const userDeptScope = session?.departmentScope || 'ALL';
+    if (session && session.role !== 'admin' && userDeptScope !== 'ALL') {
+      docs = docs.filter((doc: any) => {
+        const depts: string[] = Array.isArray(doc.department_access)
+          ? doc.department_access
+          : [];
+        return (
+          depts.includes(userDeptScope) ||
+          depts.includes('VB_PHAP_LUAT') ||
+          depts.length === 0
+        );
+      });
+    }
+
     return NextResponse.json({
       configured: true,
-      documents: data || [],
+      departmentScope: userDeptScope,
+      documents: docs,
     });
   } catch (err: any) {
     return NextResponse.json(
@@ -44,4 +69,3 @@ export async function GET() {
     );
   }
 }
-

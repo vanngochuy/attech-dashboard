@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getSupabaseAdminClient, isSupabaseAdminConfigured, cleanEnv } from '@/lib/supabase';
+import { AUTH_COOKIE_NAME, verifyAuthSession } from '@/lib/auth-session';
+import { recordAuditLog } from '@/lib/audit-log';
 
 export async function POST(request: Request) {
   try {
@@ -11,7 +14,7 @@ export async function POST(request: Request) {
     }
 
     const supabase = getSupabaseAdminClient()!;
-    const { id, drive_file_id } = await request.json();
+    const { id, drive_file_id, file_name } = await request.json();
 
     if (!id) {
       return NextResponse.json(
@@ -30,7 +33,6 @@ export async function POST(request: Request) {
       const n8nDeleteUrl = cleanEnv(process.env.N8N_DELETE_WEBHOOK_URL) || n8nBaseUrl;
 
       try {
-        console.log(`[Delete API] Gửi yêu cầu xóa file Drive ${drive_file_id} sang n8n: ${n8nDeleteUrl}`);
         const n8nRes = await fetch(n8nDeleteUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -59,6 +61,18 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    const cookieStore = cookies();
+    const session = await verifyAuthSession(cookieStore.get(AUTH_COOKIE_NAME)?.value);
+    await recordAuditLog(request, {
+      username: session?.username || 'admin',
+      role: session?.role || 'admin',
+      department: session?.departmentScope || 'ALL',
+      action: 'DELETE_DOC',
+      targetId: drive_file_id || id,
+      targetTitle: file_name || id,
+      details: `Xóa văn bản khỏi hệ thống (Drive ID: ${drive_file_id || 'N/A'})`,
+    });
 
     return NextResponse.json({
       success: true,
