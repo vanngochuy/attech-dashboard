@@ -219,7 +219,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             : 'bg-white/95 border-slate-200 text-slate-700 backdrop-blur-xl shadow-[0_-4px_20px_rgba(15,23,42,0.06)]'
         }`}
       >
-        <div className="grid grid-cols-5 h-[62px] items-center px-1 select-none">
+        <div className="grid grid-cols-4 h-[62px] items-center px-2 select-none">
           {/* 1. 📚 Tài liệu */}
           <Link
             href="/documents"
@@ -303,7 +303,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             </button>
           </div>
 
-          {/* 4. 📊 Tuân thủ */}
+          {/* 4. 📊 GP-CC */}
           <button
             type="button"
             onClick={() => {
@@ -321,33 +321,12 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             }`}
           >
             <BarChart3 className="w-5 h-5" />
-            <span className="text-[10px] leading-tight">Tuân thủ</span>
-          </button>
-
-          {/* 5. 👤 Menu / Lọc */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsAiOpen(false);
-              setMobileSheet((prev) => (prev === 'menu' ? 'none' : 'menu'));
-            }}
-            className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-xl transition-colors ${
-              mobileSheet === 'menu'
-                ? isDeepAero
-                  ? 'text-sky-400 font-bold'
-                  : 'text-sky-600 font-bold'
-                : isDeepAero
-                  ? 'text-slate-400 hover:text-slate-200'
-                  : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <SlidersHorizontal className="w-5 h-5" />
-            <span className="text-[10px] leading-tight">Menu / Lọc</span>
+            <span className="text-[10px] leading-tight">GP-CC</span>
           </button>
         </div>
       </nav>
 
-      {/* Bottom Sheet: 📊 Tuân thủ (Thống kê nhanh & Chuyển đổi Giấy phép / Hồ sơ huấn luyện) */}
+      {/* Bottom Sheet: 📊 GP-CC (Quản lý hồ sơ giấy phép và chứng chỉ) */}
       {mobileSheet === 'compliance' && (
         <div
           className="fixed inset-0 z-40 md:hidden bg-slate-900/60 backdrop-blur-xs flex items-end animate-in fade-in duration-150"
@@ -362,7 +341,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-sky-600" />
-                  <span>Quản lý Hồ sơ Tuân thủ &amp; Năng định</span>
+                  <span>Quản lý hồ sơ giấy phép và chứng chỉ</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Theo dõi hạn giấy phép khai thác thiết bị CNS và chứng chỉ nhân sự
@@ -423,100 +402,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-400" />
               </Link>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bottom Sheet: 👤 Menu / Lọc chuyên ngành (CNS, Kỹ thuật, SMS...) & Cài đặt App iPhone */}
-      {mobileSheet === 'menu' && (
-        <div
-          className="fixed inset-0 z-40 md:hidden bg-slate-900/60 backdrop-blur-xs flex items-end animate-in fade-in duration-150"
-          onClick={() => setMobileSheet('none')}
-        >
-          <div
-            className="w-full max-h-[85dvh] overflow-y-auto bg-white text-slate-800 rounded-t-3xl p-5 pb-24 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-1" />
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <SlidersHorizontal className="w-4 h-4 text-sky-600" />
-                  <span>Chuyển nhanh Danh mục Chuyên ngành</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Chạm để lọc ngay kho văn bản theo lĩnh vực phụ trách
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMobileSheet('none')}
-                className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Danh sách chuyên ngành */}
-            <div className="grid grid-cols-2 gap-2">
-              {MOBILE_DEPARTMENTS.map((dept) => {
-                const DeptIcon = dept.icon;
-                return (
-                  <button
-                    key={dept.id}
-                    type="button"
-                    onClick={() => {
-                      setMobileSheet('none');
-                      router.push(dept.id === 'ALL' ? '/documents' : `/documents?dept=${dept.id}`);
-                    }}
-                    className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-sky-50 hover:border-sky-300 text-left transition-all active:scale-98"
-                  >
-                    <span className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 text-sky-700 shadow-2xs">
-                      <DeptIcon className="w-3.5 h-3.5" />
-                    </span>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-slate-800 truncate">{dept.shortLabel}</div>
-                      <div className="text-[10px] text-slate-500 truncate">{dept.label}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Đổi giao diện Sáng / Tối */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-700">Chủ đề giao diện Header</span>
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-800"
-              >
-                {isDeepAero ? (
-                  <>
-                    <Moon className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Deep Aero (Tối)</span>
-                  </>
-                ) : (
-                  <>
-                    <Sun className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Sky Cloud (Sáng)</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Hướng dẫn cài PWA ra Màn hình chính iPhone trong 5 giây */}
-            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-200 text-xs space-y-1.5">
-              <div className="font-bold text-sky-950 flex items-center gap-1.5">
-                <img src="/attech-logo.png" alt="ATTECH" className="w-4 h-4 rounded-full" />
-                <span>Cài App ATTECH ra màn hình chính iPhone (5 giây)</span>
-              </div>
-              <p className="text-[11px] text-slate-600 leading-relaxed">
-                Trên Safari iPhone, bấm nút Chia sẻ <Share className="w-3.5 h-3.5 inline text-sky-600 mx-0.5" /> ở thanh dưới cùng → chọn{' '}
-                <strong className="text-slate-900">&ldquo;Thêm vào MH chính&rdquo; (Add to Home Screen)</strong>{' '}
-                <PlusSquare className="w-3.5 h-3.5 inline text-sky-600 mx-0.5" /> để mở toàn màn hình như App gốc.
-              </p>
             </div>
           </div>
         </div>

@@ -184,6 +184,7 @@ function DocumentsContent() {
   const [editingDoc, setEditingDoc] = useState<any | null>(null);
   const [previewDoc, setPreviewDoc] = useState<string | null>(null);
   const [mobileCompareDoc, setMobileCompareDoc] = useState<any | null>(null);
+  const [isMobileDeptMenuOpen, setIsMobileDeptMenuOpen] = useState(false);
   const [documents, setDocuments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   // Bộ lọc chuyên môn đồng bộ với URL (?dept=...) để sidebar và trang luôn khớp nhau
@@ -1083,19 +1084,53 @@ function DocumentsContent() {
               </button>
             </div>
 
-            {/* Hàng 2: Dải nút lọc vuốt ngang (Horizontal Filter Chips) */}
+            {/* Hàng 2: Nút "Menu / Lọc" chuyên ngành ở đầu trang + Các nút lọc trạng thái (Không lặp lại các chip chuyên ngành kéo ngang) */}
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+              {/* Nút Menu / Lọc Chuyên ngành đặt ngay đầu trang Tab Tài liệu */}
+              <button
+                type="button"
+                onClick={() => setIsMobileDeptMenuOpen(true)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold shrink-0 transition-all border shadow-2xs active:scale-95 ${
+                  activeFilter !== 'ALL' || issuerFilter !== 'ALL' || yearFilter !== 'ALL'
+                    ? 'bg-[#0f2043] text-white border-[#0f2043]'
+                    : 'bg-sky-50 text-sky-900 border-sky-300'
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>
+                  {activeFilter === 'ALL'
+                    ? 'Menu / Lọc'
+                    : `Lọc: ${getDeptConfig(activeFilter).shortLabel || getDeptConfig(activeFilter).label}`}
+                </span>
+                <span
+                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                    activeFilter !== 'ALL' || issuerFilter !== 'ALL' || yearFilter !== 'ALL'
+                      ? 'bg-sky-500/30 text-sky-100'
+                      : 'bg-sky-200/70 text-sky-900'
+                  }`}
+                >
+                  {filteredDocuments.length}
+                </span>
+              </button>
+
               {/* Chip: Tất cả */}
               <button
                 type="button"
                 onClick={() => {
                   setActiveFilter('ALL');
                   setStatusFilter('ALL');
+                  setIssuerFilter('ALL');
+                  setYearFilter('ALL');
                   setFilterIncompleteOnly(false);
                   setFilterMissingOnly(false);
                 }}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all border ${
-                  activeFilter === 'ALL' && statusFilter === 'ALL' && !filterIncompleteOnly && !filterMissingOnly
+                  activeFilter === 'ALL' &&
+                  statusFilter === 'ALL' &&
+                  issuerFilter === 'ALL' &&
+                  yearFilter === 'ALL' &&
+                  !filterIncompleteOnly &&
+                  !filterMissingOnly
                     ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
                     : 'bg-slate-100 text-slate-700 border-slate-200'
                 }`}
@@ -1117,6 +1152,20 @@ function DocumentsContent() {
                 <span>Có hiệu lực</span>
               </button>
 
+              {/* Chip: Đã thay thế */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === 'SUPERSEDED' ? 'ALL' : 'SUPERSEDED')}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all border ${
+                  statusFilter === 'SUPERSEDED'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                    : 'bg-amber-50/70 text-amber-800 border-amber-200'
+                }`}
+              >
+                <History className="w-3 h-3" />
+                <span>Đã thay thế</span>
+              </button>
+
               {/* Chip: Chưa đọc AI (nếu có file thiếu metadata) */}
               {incompleteMetaCount > 0 && (
                 <button
@@ -1132,47 +1181,6 @@ function DocumentsContent() {
                   <span>Chưa đọc AI ({incompleteMetaCount})</span>
                 </button>
               )}
-
-              {/* Các Chip Chuyên ngành: CNS / Kỹ thuật / SMS / VB Pháp luật... */}
-              {DEPARTMENTS.filter((d) => d.id !== 'ALL').map((dept) => {
-                const isActive = activeFilter === dept.id;
-                const count = departmentCounts[dept.id] || 0;
-                return (
-                  <button
-                    key={dept.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveFilter(isActive ? 'ALL' : dept.id);
-                      setFilterMissingOnly(false);
-                    }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all border ${
-                      isActive
-                        ? 'bg-[#0f2043] text-white border-[#0f2043] shadow-xs'
-                        : 'bg-white text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
-                    <span>{dept.shortLabel || dept.label}</span>
-                    <span className={`text-[10px] font-mono ${isActive ? 'text-sky-200' : 'text-slate-400'}`}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-
-              {/* Chip: Đã thay thế */}
-              <button
-                type="button"
-                onClick={() => setStatusFilter(statusFilter === 'SUPERSEDED' ? 'ALL' : 'SUPERSEDED')}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all border ${
-                  statusFilter === 'SUPERSEDED'
-                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                    : 'bg-amber-50/70 text-amber-800 border-amber-200'
-                }`}
-              >
-                <History className="w-3 h-3" />
-                <span>Đã thay thế</span>
-              </button>
             </div>
           </div>
 
@@ -2211,6 +2219,150 @@ function DocumentsContent() {
           </div>
         )}
       </div>
+
+      {/* Bottom Sheet: Menu / Lọc Chuyên ngành ở đầu trang Tab Tài liệu trên điện thoại */}
+      {isMobileDeptMenuOpen && (
+        <div
+          className="fixed inset-0 z-50 md:hidden bg-slate-900/60 backdrop-blur-xs flex items-end animate-in fade-in duration-150"
+          onClick={() => setIsMobileDeptMenuOpen(false)}
+        >
+          <div
+            className="w-full max-h-[85dvh] overflow-y-auto bg-white text-slate-800 rounded-t-3xl p-5 pb-24 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-1" />
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-sky-600" />
+                  <span>Menu / Lọc Kho Tài liệu</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Chọn chuyên ngành, đơn vị hoặc năm ban hành để lọc nhanh
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileDeptMenuOpen(false)}
+                className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Danh mục chuyên ngành */}
+            <div className="grid grid-cols-2 gap-2">
+              {DEPARTMENTS.map((dept) => {
+                const DeptIcon = dept.icon;
+                const isActive = activeFilter === dept.id;
+                const count = departmentCounts[dept.id] || 0;
+                return (
+                  <button
+                    key={dept.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveFilter(dept.id);
+                      setFilterMissingOnly(false);
+                      setIsMobileDeptMenuOpen(false);
+                    }}
+                    className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border text-left transition-all active:scale-98 ${
+                      isActive
+                        ? 'bg-sky-50 border-sky-400 ring-1 ring-sky-300'
+                        : 'border-slate-200 bg-slate-50 hover:bg-sky-50/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-2xs ${
+                          isActive
+                            ? 'bg-sky-600 text-white'
+                            : 'bg-white border border-slate-200 text-sky-700'
+                        }`}
+                      >
+                        <DeptIcon className="w-3.5 h-3.5" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-800 truncate">
+                          {dept.shortLabel || dept.label}
+                        </div>
+                        <div className="text-[10px] text-slate-500 truncate">{dept.label}</div>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                        isActive ? 'bg-sky-600 text-white' : 'bg-slate-200/80 text-slate-700'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Lọc theo Đơn vị ban hành & Năm ban hành */}
+            <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Đơn vị ban hành
+                </label>
+                <select
+                  value={issuerFilter}
+                  onChange={(e) => setIssuerFilter(e.target.value)}
+                  className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none focus:border-sky-500"
+                >
+                  <option value="ALL">Tất cả đơn vị</option>
+                  {issuerOptions.map((opt) => (
+                    <option key={opt.label} value={opt.label}>
+                      {opt.label} ({opt.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Năm ban hành
+                </label>
+                <select
+                  value={yearFilter}
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none focus:border-sky-500"
+                >
+                  <option value="ALL">Tất cả các năm</option>
+                  {yearOptions.map((opt) => (
+                    <option key={opt.year} value={opt.year}>
+                      Năm {opt.year} ({opt.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveFilter('ALL');
+                  setIssuerFilter('ALL');
+                  setYearFilter('ALL');
+                  setStatusFilter('ALL');
+                  setIsMobileDeptMenuOpen(false);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold"
+              >
+                Xóa bộ lọc
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsMobileDeptMenuOpen(false)}
+                className="px-4 py-2 rounded-xl bg-sky-600 text-white text-xs font-bold shadow-xs"
+              >
+                Xem kết quả ({filteredDocuments.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Đối chiếu nhanh văn bản trên iPhone (khi bấm nút 🔄 Đối chiếu trên Thẻ văn bản) */}
       {mobileCompareDoc && (
