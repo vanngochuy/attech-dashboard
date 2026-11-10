@@ -12,6 +12,7 @@ export interface AssistantDoc {
   department_access?: string[] | null;
   drive_file_id?: string | null;
   has_ocr?: boolean;
+  extra_context?: string | null;
 }
 
 interface AssistantContextValue {
@@ -20,7 +21,7 @@ interface AssistantContextValue {
   setDocsContext: (docs: AssistantDoc[] | null, scopeLabel: string) => void;
   selectedDocIds: string[];
   toggleSelectDoc: (id: string) => void;
-  selectAndAskDoc: (id: string) => void;
+  selectAndAskDoc: (docOrId: string | AssistantDoc) => void;
   clearSelectedDocs: () => void;
   markDocHasOcr: (id: string) => void;
   isOpen: boolean;
@@ -55,11 +56,17 @@ export function AssistantProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const selectAndAskDoc = useCallback((id: string) => {
-    setSelectedDocIds((prev) => {
-      if (prev.includes(id)) return prev;
-      return [...prev, id];
-    });
+  const selectAndAskDoc = useCallback((docOrId: string | AssistantDoc) => {
+    if (typeof docOrId === 'string') {
+      setSelectedDocIds([docOrId]);
+    } else {
+      setDocs((prev) => {
+        const list = prev || [];
+        const exists = list.some((d) => d.id === docOrId.id);
+        return exists ? list.map((d) => (d.id === docOrId.id ? { ...d, ...docOrId } : d)) : [docOrId, ...list];
+      });
+      setSelectedDocIds([docOrId.id]);
+    }
     setIsOpen(true);
   }, []);
 

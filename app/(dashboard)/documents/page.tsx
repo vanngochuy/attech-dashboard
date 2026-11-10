@@ -38,7 +38,8 @@ import {
   History,
   Ban,
   Bot,
-  X
+  X,
+  GitCompareArrows
 } from 'lucide-react';
 import UploadDocumentModal from '@/components/upload-document-modal';
 import EditDocumentModal from '@/components/edit-document-modal';
@@ -182,6 +183,7 @@ function DocumentsContent() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<any | null>(null);
   const [previewDoc, setPreviewDoc] = useState<string | null>(null);
+  const [mobileCompareDoc, setMobileCompareDoc] = useState<any | null>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   // Bộ lọc chuyên môn đồng bộ với URL (?dept=...) để sidebar và trang luôn khớp nhau
@@ -745,14 +747,18 @@ function DocumentsContent() {
         )}
 
         {/* Top Bar Header */}
-        <header className={`h-14 border-b flex items-center justify-between px-6 relative z-10 ${isDeepAero ? 'border-white/10' : 'border-white/20'}`}>
+        <header className={`h-14 border-b flex items-center justify-between px-3.5 sm:px-6 relative z-10 ${isDeepAero ? 'border-white/10' : 'border-white/20'}`}>
+          <div className="flex sm:hidden items-center gap-2 text-white font-bold text-xs drop-shadow-2xs">
+            <img src="/attech-logo.png" alt="ATTECH" className="w-6 h-6 rounded-full object-contain shrink-0" />
+            <span className="truncate">Kho Tài liệu ({filteredDocuments.length})</span>
+          </div>
           <div className="hidden sm:flex items-center gap-2 text-white font-bold text-sm drop-shadow-2xs">
             <Cloud className="w-4 h-4 text-white fill-white/80" />
             <span>Kho Văn bản &amp; Tài liệu Nghiệp vụ</span>
           </div>
 
           {/* Right Action Tools */}
-          <div className="flex items-center gap-2.5 ml-auto">
+          <div className="flex items-center gap-2 ml-auto">
             {/* Nút chuyển đổi Theme (Sky Cloud <-> Deep Aero) nằm bên trái Drive: Synced */}
             <ThemeToggleButton />
 
@@ -778,7 +784,7 @@ function DocumentsContent() {
               <button
                 onClick={handleScanDrive}
                 disabled={isScanningDrive}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs disabled:opacity-50 cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs disabled:opacity-50 cursor-pointer ${
                   isDeepAero
                     ? 'glass-pill-deep-aero'
                     : 'bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] backdrop-blur-[35px]'
@@ -810,8 +816,8 @@ function DocumentsContent() {
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
 
-            {/* View toggle */}
-            <div className={`flex items-center p-0.5 backdrop-blur-xs rounded-lg border ${isDeepAero ? 'bg-sky-950/40 border-white/15' : 'bg-sky-900/20 border-white/30'}`}>
+            {/* View toggle (Chỉ hiển thị trên PC; trên iPhone tự động hiển thị Thẻ thông minh) */}
+            <div className={`hidden md:flex items-center p-0.5 backdrop-blur-xs rounded-lg border ${isDeepAero ? 'bg-sky-950/40 border-white/15' : 'bg-sky-900/20 border-white/30'}`}>
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-white/85 hover:text-white'
@@ -834,15 +840,15 @@ function DocumentsContent() {
             {isAdmin && (
               <button
                 onClick={() => setIsUploadModalOpen(true)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 active:scale-95 text-white rounded-lg text-xs font-semibold transition-all shadow-md cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 active:scale-95 text-white rounded-lg text-xs font-semibold transition-all shadow-md cursor-pointer ${
                   isDeepAero
                     ? 'bg-sky-600 hover:bg-sky-500 border border-sky-400/40 shadow-sky-900/50'
                     : 'bg-[#1b3252] hover:bg-slate-900 border border-white/25'
                 }`}
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Thêm tài liệu</span>
-                <span className="text-[10px] text-sky-200 font-mono ml-0.5">C</span>
+                <span className="hidden sm:inline">Thêm tài liệu</span>
+                <span className="hidden sm:inline text-[10px] text-sky-200 font-mono ml-0.5">C</span>
               </button>
             )}
 
@@ -851,8 +857,8 @@ function DocumentsContent() {
           </div>
         </header>
 
-        {/* Sub-header / Filter Pills Bar (Dạng mờ Glassmorphism) */}
-        <div className={`px-6 py-2.5 flex items-center justify-between overflow-x-auto no-scrollbar relative z-10 border-t ${
+        {/* Sub-header / Filter Pills Bar trên PC (Dạng mờ Glassmorphism) */}
+        <div className={`hidden md:flex px-6 py-2.5 items-center justify-between overflow-x-auto no-scrollbar relative z-10 border-t ${
           isDeepAero
             ? 'bg-black/20 backdrop-blur-[20px] border-white/10'
             : 'bg-white/20 backdrop-blur-[35px] border-white/40'
@@ -1003,7 +1009,175 @@ function DocumentsContent() {
 
       {/* Thanh Tìm kiếm & Lọc Đa Trường (Cố định phía trên danh sách) */}
       {!isLoading && isDbConfigured && (
-        <div className="px-6 py-2.5 bg-white border-b border-slate-200 shadow-2xs shrink-0 z-20 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+        <>
+          {/* GIAO DIỆN IPHONE / MOBILE: Sticky Search + Horizontal Filter Chips vuốt ngang 1 ngón cái */}
+          <div className="flex md:hidden flex-col gap-2 px-3.5 py-2.5 bg-white border-b border-slate-200 shadow-xs shrink-0 z-20">
+            {/* Hàng 1: Ô tìm kiếm (hỗ trợ đọc giọng nói Micro trên bàn phím iPhone) + Nút Tìm AI */}
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex-1">
+                {isAiSearching ? (
+                  <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-600 w-4 h-4 animate-spin" />
+                ) : isAiSearchMode ? (
+                  <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-600 w-4 h-4" />
+                ) : (
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-600 w-4 h-4" />
+                )}
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && isAiSearchMode) {
+                      handleTriggerAiSearch();
+                    }
+                  }}
+                  placeholder={
+                    isAiSearchMode
+                      ? 'Nhập nội dung cần quét AI...'
+                      : 'Tìm số hiệu, trích yếu (bấm 🎙️ đọc giọng nói)...'
+                  }
+                  className={`w-full rounded-xl pl-9 pr-8 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden transition-all ${
+                    isAiSearchMode
+                      ? 'bg-indigo-50/60 focus:bg-white border border-indigo-300 focus:border-indigo-500'
+                      : 'bg-slate-100/90 focus:bg-white border border-slate-200 focus:border-sky-500'
+                  }`}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      if (isAiSearchMode) {
+                        setAiSearchResults(null);
+                        setAiSearchSummary(null);
+                      }
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 p-0.5"
+                    title="Xóa từ khóa"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const nextMode = !isAiSearchMode;
+                  setIsAiSearchMode(nextMode);
+                  if (!nextMode) {
+                    setAiSearchResults(null);
+                    setAiSearchSummary(null);
+                  } else if (searchQuery.trim()) {
+                    handleTriggerAiSearch();
+                  }
+                }}
+                className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 active:scale-95 ${
+                  isAiSearchMode
+                    ? 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white ring-2 ring-indigo-300'
+                    : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                }`}
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${isAiSearchMode ? 'text-amber-300 animate-pulse' : 'text-indigo-600'}`} />
+                <span>Tìm AI</span>
+              </button>
+            </div>
+
+            {/* Hàng 2: Dải nút lọc vuốt ngang (Horizontal Filter Chips) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+              {/* Chip: Tất cả */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveFilter('ALL');
+                  setStatusFilter('ALL');
+                  setFilterIncompleteOnly(false);
+                  setFilterMissingOnly(false);
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all border ${
+                  activeFilter === 'ALL' && statusFilter === 'ALL' && !filterIncompleteOnly && !filterMissingOnly
+                    ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                Tất cả ({documents.length})
+              </button>
+
+              {/* Chip: Có hiệu lực */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all border ${
+                  statusFilter === 'ACTIVE'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                    : 'bg-emerald-50/70 text-emerald-800 border-emerald-200'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === 'ACTIVE' ? 'bg-white' : 'bg-emerald-500'}`} />
+                <span>Có hiệu lực</span>
+              </button>
+
+              {/* Chip: Chưa đọc AI (nếu có file thiếu metadata) */}
+              {incompleteMetaCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFilterIncompleteOnly(!filterIncompleteOnly)}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all border ${
+                    filterIncompleteOnly
+                      ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                      : 'bg-purple-50 text-purple-800 border-purple-200'
+                  }`}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>Chưa đọc AI ({incompleteMetaCount})</span>
+                </button>
+              )}
+
+              {/* Các Chip Chuyên ngành: CNS / Kỹ thuật / SMS / VB Pháp luật... */}
+              {DEPARTMENTS.filter((d) => d.id !== 'ALL').map((dept) => {
+                const isActive = activeFilter === dept.id;
+                const count = departmentCounts[dept.id] || 0;
+                return (
+                  <button
+                    key={dept.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveFilter(isActive ? 'ALL' : dept.id);
+                      setFilterMissingOnly(false);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all border ${
+                      isActive
+                        ? 'bg-[#0f2043] text-white border-[#0f2043] shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
+                    <span>{dept.shortLabel || dept.label}</span>
+                    <span className={`text-[10px] font-mono ${isActive ? 'text-sky-200' : 'text-slate-400'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {/* Chip: Đã thay thế */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === 'SUPERSEDED' ? 'ALL' : 'SUPERSEDED')}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all border ${
+                  statusFilter === 'SUPERSEDED'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                    : 'bg-amber-50/70 text-amber-800 border-amber-200'
+                }`}
+              >
+                <History className="w-3 h-3" />
+                <span>Đã thay thế</span>
+              </button>
+            </div>
+          </div>
+
+          {/* GIAO DIỆN MÁY TÍNH (PC): Giữ nguyên 100% thanh lọc đa trường */}
+          <div className="hidden md:flex px-6 py-2.5 bg-white border-b border-slate-200 shadow-2xs shrink-0 z-20 flex-col lg:flex-row lg:items-center justify-between gap-2.5">
           {/* Trái: Tiêu đề + Số lượng văn bản khớp */}
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -1218,13 +1392,14 @@ function DocumentsContent() {
             </div>
           </div>
         </div>
+        </>
       )}
 
       {/* Main Document Content */}
       <div className="flex-1 overflow-y-auto">
         {/* Banner trạng thái Tìm AI */}
         {isAiSearchMode && (
-          <div className="px-6 py-2.5 bg-gradient-to-r from-indigo-50/90 via-sky-50/90 to-purple-50/90 border-b border-indigo-100 flex items-center justify-between text-xs text-indigo-900 shadow-2xs">
+          <div className="px-4 sm:px-6 py-2.5 bg-gradient-to-r from-indigo-50/90 via-sky-50/90 to-purple-50/90 border-b border-indigo-100 flex items-center justify-between text-xs text-indigo-900 shadow-2xs">
             <div className="flex items-center gap-2 min-w-0">
               {isAiSearching ? (
                 <>
@@ -1318,7 +1493,145 @@ function DocumentsContent() {
                   Đặt lại bộ lọc
                 </button>
               </div>
-            ) : viewMode === 'list' ? (
+            ) : (
+              <>
+                {/* GIAO DIỆN THẺ VĂN BẢN THÔNG MINH TRÊN IPHONE (3 hàng gọn gàng, không bao giờ phải cuộn ngang) */}
+                <div className="md:hidden px-3.5 pt-3 space-y-2.5">
+                  {filteredDocuments.map((doc) => {
+                    const deptCode = doc.department_access?.[0] || '';
+                    const dept = getDeptConfig(deptCode);
+                    const isMissingOnDrive = doc.sync_status === 'missing_on_drive';
+                    const isSuperseded = doc.status === 'SUPERSEDED';
+                    const aiSnippet = isAiSearchMode ? aiSearchResults?.find((r) => r.id === doc.id)?.snippet : null;
+                    const isPinnedAi = selectedDocIds.includes(doc.id);
+
+                    return (
+                      <div
+                        key={doc.id}
+                        className={`rounded-2xl border p-3.5 shadow-xs transition-all bg-white ${
+                          isMissingOnDrive
+                            ? 'border-rose-300 bg-rose-50/20'
+                            : isSuperseded
+                              ? 'border-amber-200 bg-amber-50/15'
+                              : isPinnedAi
+                                ? 'border-indigo-400 ring-1 ring-indigo-300'
+                                : 'border-slate-200/90'
+                        }`}
+                      >
+                        {/* Hàng 1 (Tiêu đề ưu tiên số 1): Tên văn bản hiển thị ĐẦY ĐỦ 100%, không cắt chữ (...), bấm vào mở PDF ngay */}
+                        <div
+                          onClick={() => {
+                            if (!isMissingOnDrive) setPreviewDoc(doc.drive_file_id);
+                          }}
+                          className={`mb-2 ${!isMissingOnDrive ? 'cursor-pointer active:opacity-75' : 'cursor-not-allowed'}`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="shrink-0 mt-0.5">{getFileIcon(doc.file_name)}</div>
+                            <h4
+                              className={`text-[13.5px] font-bold leading-snug break-words whitespace-normal flex-1 ${
+                                isMissingOnDrive
+                                  ? 'line-through text-slate-400'
+                                  : isSuperseded
+                                    ? 'text-slate-700'
+                                    : 'text-slate-900'
+                              }`}
+                            >
+                              {doc.file_name}
+                            </h4>
+                          </div>
+                          {aiSnippet && (
+                            <div className="mt-1.5 p-2 rounded-lg bg-indigo-50/80 border border-indigo-200/70 text-[11px] text-indigo-950 break-words whitespace-normal">
+                              <Sparkles className="w-3 h-3 text-indigo-600 inline mr-1" />
+                              <strong className="text-indigo-800">AI:</strong> {aiSnippet}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Hàng 2 (Ngày ban hành & Định danh): Ưu tiên hiển thị rõ Ngày ban hành + Số/Ký hiệu + Trạng thái Hiệu lực */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 px-2.5 py-1.5 rounded-xl bg-slate-50/90 border border-slate-100">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-semibold text-slate-500">Ngày ban hành:</span>
+                            <span className="font-mono text-xs font-extrabold text-sky-800 bg-sky-50 border border-sky-200/80 px-2 py-0.5 rounded-md">
+                              {doc.issue_date ? new Date(doc.issue_date).toLocaleDateString('vi-VN') : '---'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-md break-all">
+                              {doc.document_code || `DOC-${doc.id.slice(0, 6).toUpperCase()}`}
+                            </span>
+                            {isSuperseded ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                                <History className="w-2.5 h-2.5" /> Hết HL
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Còn hiệu lực
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Hàng 3 (Đơn vị & Thao tác nhanh): Tên cơ quan ban hành + 3 nút tròn nhỏ gọn [👁️ Xem PDF] – [✨ Hỏi AI] – [🔄 Đối chiếu] */}
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold truncate max-w-[115px]">
+                              <Building className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span className="truncate">{abbreviateIssuer(doc.issuing_authority)}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-50 text-slate-600 border border-slate-200 shrink-0">
+                              <span className={`w-1.5 h-1.5 rounded-full ${dept.dot}`} />
+                              <span>{dept.shortLabel || dept.label}</span>
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            {/* 1. [👁️ Xem PDF] */}
+                            <button
+                              type="button"
+                              disabled={isMissingOnDrive}
+                              onClick={() => !isMissingOnDrive && setPreviewDoc(doc.drive_file_id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-100 active:bg-slate-200 text-slate-700 text-[11px] font-semibold border border-slate-200 disabled:opacity-40"
+                              title="Xem PDF"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-sky-600" />
+                              <span>PDF</span>
+                            </button>
+
+                            {/* 2. [✨ Hỏi AI] (1 chạm gắn văn bản vào Chatbot) */}
+                            <button
+                              type="button"
+                              data-assistant-trigger="true"
+                              onClick={() => selectAndAskDoc(doc.id)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-bold transition-all shadow-2xs active:scale-95 ${
+                                isPinnedAi
+                                  ? 'bg-indigo-600 text-white border border-indigo-600'
+                                  : 'bg-indigo-50 text-indigo-700 border border-indigo-200 active:bg-indigo-100'
+                              }`}
+                              title="Hỏi AI đúng văn bản này"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Hỏi AI</span>
+                            </button>
+
+                            {/* 3. [🔄 Đối chiếu] */}
+                            <button
+                              type="button"
+                              onClick={() => setMobileCompareDoc(doc)}
+                              className="w-8 h-8 rounded-full bg-amber-50 active:bg-amber-100 text-amber-700 border border-amber-200 flex items-center justify-center"
+                              title="Đối chiếu tình trạng hiệu lực & metadata"
+                            >
+                              <GitCompareArrows className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* GIAO DIỆN MÁY TÍNH (PC): Giữ nguyên Table / Grid */}
+                <div className="hidden md:block">
+                  {viewMode === 'list' ? (
               /* TABLE VIEW (với phần Tiêu đề cột Freeze / Sticky khi cuộn xuống) */
               <div className="px-6 pt-3">
                 <div className="border border-slate-200 rounded-xl bg-white shadow-xs">
@@ -1330,9 +1643,9 @@ function DocumentsContent() {
                     <div className="flex items-center gap-4 shrink-0 text-right">
                       <span className="w-28 text-left hidden sm:inline">SỐ / KÝ HIỆU</span>
                       <span className="w-28 text-left hidden md:inline">ĐƠN VỊ BAN HÀNH</span>
-                      <span className="w-28 text-center">NGÀY BAN HÀNH</span>
+                      <span className="w-24 sm:w-28 text-center">NGÀY BAN HÀNH</span>
                       <span className="w-32 text-center hidden lg:inline">CHUYÊN MÔN</span>
-                      <span className="w-28 text-center">HIỆU LỰC</span>
+                      <span className="w-28 text-center hidden sm:inline">HIỆU LỰC</span>
                       <span className={`${isAdmin ? 'w-20' : 'w-10'} text-center`}></span>
                     </div>
                   </div>
@@ -1359,7 +1672,7 @@ function DocumentsContent() {
                         >
                           {/* Left: Icon + File Name + Snippet -> Nhấn vào TÊN VĂN BẢN để mở xem trước */}
                           <div
-                            className={`flex items-start gap-3 min-w-0 pr-4 flex-1 ${
+                            className={`flex items-start gap-3 min-w-0 pr-3 flex-1 ${
                               !isMissingOnDrive ? 'cursor-pointer group/title' : 'cursor-not-allowed'
                             }`}
                             onClick={() => {
@@ -1370,7 +1683,7 @@ function DocumentsContent() {
                             <div className="shrink-0 mt-0.5">{getFileIcon(doc.file_name)}</div>
                             <div className="min-w-0 flex-1">
                               <span
-                                className={`text-xs font-semibold block truncate ${isMissingOnDrive
+                                className={`text-xs font-semibold block whitespace-normal break-words lg:truncate ${isMissingOnDrive
                                     ? 'text-slate-400 line-through decoration-rose-500/50'
                                     : isSuperseded
                                       ? 'text-slate-600 group-hover/title:text-indigo-600 group-hover/title:underline'
@@ -1528,7 +1841,7 @@ function DocumentsContent() {
                             />
 
                             {/* Trạng thái hiệu lực */}
-                            <span className="w-28 text-center">
+                            <span className="w-28 text-center hidden sm:inline">
                               {isSuperseded ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
                                   <History className="w-3 h-3 text-amber-600" /> Đã thay thế
@@ -1891,10 +2204,122 @@ function DocumentsContent() {
                   );
                 })}
               </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         )}
       </div>
+
+      {/* Modal Đối chiếu nhanh văn bản trên iPhone (khi bấm nút 🔄 Đối chiếu trên Thẻ văn bản) */}
+      {mobileCompareDoc && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+          onClick={() => setMobileCompareDoc(null)}
+        >
+          <div
+            className="bg-white border border-slate-200 rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 pb-8 sm:pb-5 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-200 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto sm:hidden" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+                  <GitCompareArrows className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Đối chiếu Hồ sơ &amp; Hiệu lực</h3>
+                  <p className="text-[11px] text-slate-500">Kiểm tra tình trạng văn bản trong Kho chính thức</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileCompareDoc(null)}
+                className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="font-bold text-slate-900 text-[13px] leading-snug">
+                {mobileCompareDoc.file_name}
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/80 text-[11px]">
+                <div>
+                  <span className="text-slate-400 block">Số / Ký hiệu:</span>
+                  <span className="font-mono font-bold text-indigo-700">
+                    {mobileCompareDoc.document_code || 'Chưa cập nhật'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Ngày ban hành:</span>
+                  <span className="font-mono font-semibold text-slate-800">
+                    {mobileCompareDoc.issue_date
+                      ? new Date(mobileCompareDoc.issue_date).toLocaleDateString('vi-VN')
+                      : '---'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Cơ quan ban hành:</span>
+                  <span className="font-semibold text-slate-800">
+                    {abbreviateIssuer(mobileCompareDoc.issuing_authority)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Trạng thái hiệu lực:</span>
+                  {mobileCompareDoc.status === 'SUPERSEDED' ? (
+                    <span className="font-bold text-amber-700">Đã bị thay thế</span>
+                  ) : (
+                    <span className="font-bold text-emerald-700">Đang còn hiệu lực</span>
+                  )}
+                </div>
+              </div>
+              <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
+                <span className="text-slate-500">Lớp văn bản AI (OCR):</span>
+                {Boolean(mobileCompareDoc.ocr_content && String(mobileCompareDoc.ocr_content).trim().length > 0) ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Đã sẵn sàng hỏi đáp sâu
+                  </span>
+                ) : (
+                  <span className="text-amber-700 font-medium">Chỉ có Metadata tóm tắt</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = mobileCompareDoc;
+                    setMobileCompareDoc(null);
+                    handleScanSingleDocAi(target);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 font-semibold"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Quét AI cập nhật Metadata</span>
+                </button>
+              )}
+              <button
+                type="button"
+                data-assistant-trigger="true"
+                onClick={() => {
+                  const id = mobileCompareDoc.id;
+                  setMobileCompareDoc(null);
+                  selectAndAskDoc(id);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold shadow-xs"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Hỏi AI về văn bản này</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Thêm tài liệu mới (Chỉ dành cho Admin) */}
       {isAdmin && (

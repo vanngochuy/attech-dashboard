@@ -25,16 +25,39 @@ import { useAssistant, AssistantDoc } from '@/components/assistant-context';
 import { DocumentPreviewModal } from '@/components/document-preview-modal';
 import { useAuth } from '@/components/auth-context';
 
-function renderInline(text: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith('**') && part.endsWith('**') ? (
-      <strong key={i} className="font-semibold text-slate-900">
-        {part.slice(2, -2)}
-      </strong>
-    ) : (
-      <React.Fragment key={i}>{part}</React.Fragment>
-    )
-  );
+function renderInline(
+  text: string,
+  docList: AssistantDoc[],
+  onOpenPreview: (driveFileId: string) => void
+) {
+  return text.split(/(\*\*[^*]+\*\*|\[?DOC-[0-9A-F]{6}\]?)/gi).map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={i} className="font-semibold text-slate-900">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    const cleanCode = part.replace(/^\[|\]$/g, '').toUpperCase();
+    if (/^DOC-[0-9A-F]{6}$/.test(cleanCode)) {
+      const matched = docList.find((d) => `DOC-${d.id.slice(0, 6).toUpperCase()}` === cleanCode);
+      if (matched?.drive_file_id) {
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onOpenPreview(matched.drive_file_id!)}
+            className="inline-flex items-center gap-1 mx-0.5 px-1.5 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-mono text-[11px] font-semibold underline decoration-indigo-400 cursor-pointer"
+            title={`Bấm để mở xem PDF: ${matched.file_name}`}
+          >
+            <FileText className="w-2.5 h-2.5 shrink-0" />
+            <span>{matched.document_code || cleanCode}</span>
+          </button>
+        );
+      }
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
 }
 
 export function AnimatedChatbotIcon({ className = 'w-14 h-14' }: { className?: string }) {
@@ -261,33 +284,55 @@ export default function FloatingAssistant() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen, isExpanded]);
 
-  // Trích xuất mã DOC-XXXXXX từ câu trả lời của AI để hiển thị nút bấm mở xem trước PDF
+  // Trích xuất mã DOC-XXXXXX hoặc số hiệu văn bản từ câu trả lời của AI để hiển thị nút bấm mở xem trước PDF ngay
   const extractSources = (content: string) => {
+    const foundMap = new Map<string, AssistantDoc>();
+
+    // 1. Tìm theo mã DOC-XXXXXX
     const codes = Array.from(new Set(content.match(/DOC-[0-9A-F]{6}/gi) || [])).map((c) => c.toUpperCase());
-    return codes
-      .map((code) => docList.find((d) => `DOC-${d.id.slice(0, 6).toUpperCase()}` === code))
-      .filter((d): d is AssistantDoc => !!d);
+    codes.forEach((code) => {
+      const doc = docList.find((d) => `DOC-${d.id.slice(0, 6).toUpperCase()}` === code);
+      if (doc) foundMap.set(doc.id, doc);
+    });
+
+    // 2. Tìm theo Số / Ký hiệu văn bản (ví dụ: "1998/KT...", "750/QĐ-KTQLB")
+    docList.forEach((d) => {
+      if (d.document_code && d.document_code.length >= 3 && content.toLowerCase().includes(d.document_code.toLowerCase())) {
+        foundMap.set(d.id, d);
+      }
+    });
+
+    // 3. Nếu đang ghim 1-2 văn bản để hỏi sâu thì luôn đính kèm nút mở nhanh PDF của văn bản đó
+    if (foundMap.size === 0 && selectedDocs.length > 0) {
+      selectedDocs.forEach((sd) => {
+        if (sd.drive_file_id) foundMap.set(sd.id, sd);
+      });
+    }
+
+    return Array.from(foundMap.values());
   };
+
+  // Các nút câu hỏi gợi ý 1 chạm (Quick Prompts - Không cần gõ phím trên iPhone)
+  const quickPrompts = [
+    '📌 Tóm tắt nội dung chính trong 5 ý',
+    '⏰ Các mốc thời gian & hạn báo cáo?',
+    '🏢 Trách nhiệm của ATTECH là gì?',
+    '⚖️ Văn bản này thay thế hay sửa đổi văn bản nào?',
+  ];
 
   // Gợi ý câu hỏi thông minh tùy theo số lượng văn bản đang chọn
   const suggestions =
     selectedDocs.length >= 2
       ? [
-        'So sánh điểm giống và khác nhau giữa các văn bản đã chọn',
-        'Tóm tắt nội dung chính của từng văn bản',
-        'Đối tượng áp dụng và trách nhiệm thực hiện của các văn bản khác nhau thế nào?',
-      ]
-      : selectedDocs.length === 1
-        ? [
-          'Tóm tắt nội dung cốt lõi của văn bản này',
-          'Các quy định, nhiệm vụ hoặc điều khoản chính là gì?',
-          'Đơn vị, cá nhân nào chịu trách nhiệm thi hành?',
+          'So sánh điểm giống và khác nhau giữa các văn bản đã chọn',
+          ...quickPrompts,
         ]
+      : selectedDocs.length === 1
+        ? quickPrompts
         : [
-          'Liệt kê các văn bản đang hiển thị',
-          'Văn bản nào được ban hành mới nhất?',
-          'Những văn bản nào đang còn hiệu lực?',
-        ];
+            ...quickPrompts,
+            'Văn bản nào được ban hành mới nhất?',
+          ];
 
   const sendSuggestion = (text: string) => {
     handleInputChange({ target: { value: text } } as React.ChangeEvent<HTMLInputElement>);
@@ -466,27 +511,27 @@ export default function FloatingAssistant() {
           ref={chatWindowRef}
           className={
             isExpanded
-              ? 'fixed inset-4 sm:inset-8 z-40 bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200'
-              : 'fixed bottom-24 right-6 z-40 w-[430px] max-w-[calc(100vw-2rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200'
+              ? 'fixed inset-0 md:inset-8 z-50 md:z-40 h-[100dvh] md:h-auto bg-white border-0 md:border md:border-slate-200 rounded-none md:rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200'
+              : 'fixed inset-0 md:inset-auto md:bottom-24 md:right-6 z-50 md:z-40 w-full md:w-[430px] md:max-w-[calc(100vw-2rem)] h-[100dvh] md:h-[600px] md:max-h-[calc(100vh-8rem)] bg-white border-0 md:border md:border-slate-200 rounded-none md:rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200'
           }
         >
-          {/* Thanh tiêu đề */}
-          <div className="flex items-center justify-between px-4 py-3 bg-indigo-600 text-white shrink-0">
+          {/* Thanh tiêu đề (hỗ trợ pt-safe cho tai thỏ / Dynamic Island của iPhone) */}
+          <div className="flex items-center justify-between px-4 py-3 pt-safe bg-indigo-600 text-white shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center shrink-0 p-0.5">
                 <AnimatedChatbotIcon className="w-8 h-8" />
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-bold leading-tight flex items-center gap-2">
-                  <span>Trợ lý ATTECH Notebook</span>
+                  <span className="truncate">Trợ lý ATTECH AI</span>
                   {selectedDocs.length > 0 && (
-                    <span className="text-[10px] font-mono bg-emerald-400 text-slate-950 font-bold px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-mono bg-emerald-400 text-slate-950 font-bold px-2 py-0.5 rounded-full shrink-0">
                       Đọc sâu {selectedDocs.length} file
                     </span>
                   )}
                 </div>
                 <div className="text-[11px] text-indigo-100 truncate">
-                  {docs ? `${scopeLabel} · ${docList.length} văn bản trong bộ lọc` : 'Hỏi đáp tài liệu nội bộ'}
+                  {docs ? `${scopeLabel} · ${docList.length} văn bản` : 'Hỏi đáp tài liệu nội bộ'}
                 </div>
               </div>
             </div>
@@ -517,7 +562,7 @@ export default function FloatingAssistant() {
                   setIsExpanded(!isExpanded);
                   setShowSourcePicker(false);
                 }}
-                className="p-1.5 rounded-md hover:bg-white/20 transition-colors"
+                className="hidden md:inline-flex p-1.5 rounded-md hover:bg-white/20 transition-colors"
                 title={isExpanded ? 'Thu gọn về góc phải' : 'Mở rộng chế độ NotebookLM'}
               >
                 {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -527,7 +572,7 @@ export default function FloatingAssistant() {
                 className="p-1.5 rounded-md hover:bg-white/20 transition-colors"
                 title="Đóng"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5 md:w-4 md:h-4" />
               </button>
             </div>
           </div>
@@ -551,18 +596,28 @@ export default function FloatingAssistant() {
                   {selectedDocs.length > 0 && (
                     <div className="px-3.5 py-2 bg-indigo-50/90 border-b border-indigo-200/80 flex flex-wrap items-center gap-1.5 shrink-0">
                       <span className="text-[11px] font-semibold text-indigo-800 mr-1">
-                        Đang ghim đọc toàn văn:
+                        Đang hỏi văn bản:
                       </span>
                       {selectedDocs.map((sd) => (
                         <div
                           key={sd.id}
-                          className="inline-flex items-center gap-1.5 bg-white border border-indigo-200 rounded-lg px-2 py-1 text-[11px] text-slate-800 shadow-2xs max-w-[240px]"
+                          className="inline-flex items-center gap-1.5 bg-white border border-indigo-200 rounded-lg px-2 py-1 text-[11px] text-slate-800 shadow-2xs max-w-[260px]"
                         >
                           <FileText className="w-3 h-3 text-indigo-600 shrink-0" />
                           <span className="font-semibold text-indigo-700 shrink-0">
                             {sd.document_code || `DOC-${sd.id.slice(0, 6).toUpperCase()}`}
                           </span>
                           <span className="truncate text-slate-600">{sd.file_name}</span>
+                          {sd.drive_file_id && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewFileId(sd.drive_file_id!)}
+                              className="text-sky-600 hover:text-sky-800 shrink-0 p-0.5"
+                              title="Mở xem PDF văn bản này"
+                            >
+                              <Eye className="w-3 h-3" />
+                            </button>
+                          )}
                           {!sd.has_ocr && (
                             <button
                               type="button"
@@ -603,12 +658,12 @@ export default function FloatingAssistant() {
                     {messages.length === 0 ? (
                       <div className="flex flex-col items-center text-center pt-2">
                         {selectedDocs.length > 0 && (
-                          <div className="mb-2">
+                          <div className="mb-3">
                             <h4 className="text-sm font-bold text-slate-900">
-                              Sẵn sàng phân tích {selectedDocs.length} văn bản đã chọn
+                              Sẵn sàng phân tích {selectedDocs.length === 1 ? 'văn bản đang chọn' : `${selectedDocs.length} văn bản đã chọn`}
                             </h4>
                             <p className="text-xs text-slate-600 mt-1 max-w-md leading-relaxed">
-                              AI sẽ đọc trực tiếp toàn bộ nội dung chữ (OCR) đã lưu trên Supabase của văn bản được chọn và trích dẫn chính xác từng trang.
+                              Chạm vào 1 trong các câu hỏi gợi ý bên dưới để hỏi ngay không cần gõ phím, hoặc nhập câu hỏi bất kỳ.
                             </p>
                           </div>
                         )}
@@ -618,7 +673,7 @@ export default function FloatingAssistant() {
                             <button
                               key={s}
                               onClick={() => sendSuggestion(s)}
-                              className="text-xs text-left px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-700 text-slate-700 transition-colors shadow-xs"
+                              className="text-xs font-medium text-left px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-700 active:bg-indigo-50 text-slate-800 transition-colors shadow-xs"
                             >
                               {s}
                             </button>
@@ -646,20 +701,22 @@ export default function FloatingAssistant() {
                             >
                               {m.content.split('\n').map((line, i) => (
                                 <p key={i} className="mb-1.5 last:mb-0 break-words">
-                                  {m.role === 'assistant' ? renderInline(line) : line}
+                                  {m.role === 'assistant'
+                                    ? renderInline(line, docList, (fid) => setPreviewFileId(fid))
+                                    : line}
                                 </p>
                               ))}
                               {sources.length > 0 && (
                                 <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
                                   <span className="text-[10px] font-semibold text-slate-400 uppercase mr-1">
-                                    Nguồn trích dẫn:
+                                    Bấm mở PDF nguồn:
                                   </span>
                                   {sources.map((d) =>
                                     d.drive_file_id ? (
                                       <button
                                         key={d.id}
                                         onClick={() => setPreviewFileId(d.drive_file_id!)}
-                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-medium transition-colors max-w-full"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 border border-indigo-200 text-[11px] font-semibold transition-colors max-w-full"
                                         title={`Mở xem trước: ${d.file_name}`}
                                       >
                                         <FileText className="w-3 h-3 shrink-0" />
@@ -701,11 +758,26 @@ export default function FloatingAssistant() {
                     <div ref={endRef} />
                   </div>
 
-                  {/* Ô nhập câu hỏi */}
+                  {/* Thanh Nút gợi ý câu hỏi nhanh (Quick Prompts 1 chạm - Không cần gõ phím) luôn nằm ngay trên ô nhập chat */}
+                  <div className="px-3 py-2 bg-white border-t border-slate-100 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+                    {quickPrompts.map((qp) => (
+                      <button
+                        key={qp}
+                        type="button"
+                        disabled={isLoading}
+                        onClick={() => sendSuggestion(qp)}
+                        className="px-2.5 py-1.5 rounded-full bg-slate-100 hover:bg-indigo-50 active:bg-indigo-100 text-slate-700 hover:text-indigo-700 border border-slate-200/90 text-[11px] font-medium shrink-0 transition-colors disabled:opacity-50"
+                      >
+                        {qp}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Ô nhập câu hỏi (tối ưu iOS Keyboard Safe-Area) */}
                   <form
                     id="assistant-form"
                     onSubmit={handleSubmit}
-                    className="p-3 border-t border-slate-200 bg-white flex items-center gap-2 shrink-0"
+                    className="p-3 pb-safe border-t border-slate-200 bg-white flex items-center gap-2 shrink-0"
                   >
                     <input
                       value={input}
@@ -713,15 +785,15 @@ export default function FloatingAssistant() {
                       disabled={isLoading}
                       placeholder={
                         selectedDocs.length > 0
-                          ? `Hỏi chi tiết về ${selectedDocs.length} văn bản đang chọn...`
-                          : 'Nhập câu hỏi ...'
+                          ? `Hỏi về văn bản ${selectedDocs[0].document_code || 'đang chọn'}...`
+                          : 'Nhập câu hỏi (hoặc chạm câu hỏi gợi ý ở trên)...'
                       }
-                      className="flex-1 bg-slate-100 border border-slate-200 focus:bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 rounded-full px-4 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all"
+                      className="flex-1 bg-slate-100 border border-slate-200 focus:bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 rounded-full px-4 py-2.5 md:py-2 text-sm md:text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition-all"
                     />
                     <button
                       type="submit"
                       disabled={isLoading || !(input ?? '').trim()}
-                      className="w-9 h-9 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shrink-0"
+                      className="w-10 h-10 md:w-9 md:h-9 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shrink-0"
                     >
                       <Send className="w-4 h-4" />
                     </button>
@@ -733,7 +805,7 @@ export default function FloatingAssistant() {
         </div>
       )}
 
-      {/* Nút Robot 3D nổi có thể kéo thả di chuyển tự do trên màn hình */}
+      {/* Nút Robot 3D nổi trên máy tính (PC); trên iPhone đã có nút ✨ Hỏi AI ở chính giữa Bottom Tab Bar */}
       <button
         ref={launcherBtnRef}
         onPointerDown={handlePointerDown}
@@ -745,7 +817,7 @@ export default function FloatingAssistant() {
             ? { left: `${botPos.x}px`, top: `${botPos.y}px`, bottom: 'auto', right: 'auto' }
             : undefined
         }
-        className={`fixed z-40 w-[74px] h-[74px] rounded-full flex items-center justify-center transition-transform duration-150 hover:scale-105 active:scale-95 focus:outline-none group touch-none cursor-grab active:cursor-grabbing ${
+        className={`hidden md:flex fixed z-40 w-[74px] h-[74px] rounded-full items-center justify-center transition-transform duration-150 hover:scale-105 active:scale-95 focus:outline-none group touch-none cursor-grab active:cursor-grabbing ${
           botPos ? '' : 'bottom-5 right-5'
         }`}
         title="Kéo thả để di chuyển vị trí, bấm để mở trợ lý AI"

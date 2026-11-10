@@ -21,6 +21,9 @@ export async function POST(req: Request) {
 
     // 3. Nếu người dùng tích chọn văn bản (chế độ NotebookLM), lấy toàn văn ocr_content từ Supabase
     let deepDocsContext = '';
+    const foundDbIds = new Set<string>();
+    const contextBlocks: string[] = [];
+
     if (pinnedIds.length > 0 && isSupabaseAdminConfigured()) {
       const supabase = getSupabaseAdminClient();
       if (supabase) {
@@ -30,20 +33,20 @@ export async function POST(req: Request) {
           .in('id', pinnedIds);
 
         if (fullDocs && fullDocs.length > 0) {
-          deepDocsContext = fullDocs
-            .map((d, idx) => {
-              const code = `DOC-${String(d.id || '').slice(0, 6).toUpperCase()}`;
-              const statusText =
-                d.status === 'SUPERSEDED'
-                  ? '⚠️ ĐÃ HẾT HIỆU LỰC (Đã bị thay thế bởi văn bản mới)'
-                  : '✅ Còn hiệu lực';
-              const rawOcr = (d.ocr_content || '').trim();
-              const truncatedOcr =
-                rawOcr.length > MAX_OCR_CHARS_PER_DOC
-                  ? rawOcr.slice(0, MAX_OCR_CHARS_PER_DOC) + '\n...[Nội dung tiếp theo được lược bớt]...'
-                  : rawOcr;
+          fullDocs.forEach((d, idx) => {
+            foundDbIds.add(String(d.id));
+            const code = `DOC-${String(d.id || '').slice(0, 6).toUpperCase()}`;
+            const statusText =
+              d.status === 'SUPERSEDED'
+                ? '⚠️ ĐÃ HẾT HIỆU LỰC (Đã bị thay thế bởi văn bản mới)'
+                : '✅ Còn hiệu lực';
+            const rawOcr = (d.ocr_content || '').trim();
+            const truncatedOcr =
+              rawOcr.length > MAX_OCR_CHARS_PER_DOC
+                ? rawOcr.slice(0, MAX_OCR_CHARS_PER_DOC) + '\n...[Nội dung tiếp theo được lược bớt]...'
+                : rawOcr;
 
-              return `==================================================
+            contextBlocks.push(`==================================================
 TÀI LIỆU ĐƯỢC CHỌN #${idx + 1}: [${code}] ${d.file_name}
 - Số / Ký hiệu: ${d.document_code || 'Không rõ'}
 - Đơn vị ban hành: ${d.issuing_authority || 'Không rõ'}
@@ -55,12 +58,34 @@ ${
     ? `NỘI DUNG TOÀN VĂN (Đã trích xuất OCR):\n${truncatedOcr}`
     : `[CHƯA CÓ NỘI DUNG OCR]: Văn bản này được tải lên trước khi bật tính năng OCR tự động. Hãy nhắc người dùng bấm nút "Đọc OCR 1 lần" bên cạnh tên văn bản trong khung chat để nạp nội dung chi tiết.`
 }
-==================================================`;
-            })
-            .join('\n\n');
+==================================================`);
+          });
         }
       }
     }
+
+    // Bổ sung ngữ cảnh cho các văn bản dự thảo/email từ tab Công việc được ghim hỏi trực tiếp
+    if (pinnedIds.length > 0) {
+      pinnedIds.forEach((pid) => {
+        if (!foundDbIds.has(pid)) {
+          const clientDoc = docs.find((d) => String(d.id) === String(pid));
+          if (clientDoc) {
+            const code = `DOC-${String(clientDoc.id || '').slice(0, 6).toUpperCase()}`;
+            contextBlocks.push(`==================================================
+TÀI LIỆU ĐƯỢC CHỌN: [${code}] ${clientDoc.file_name}
+- Số / Ký hiệu: ${clientDoc.document_code || 'Chưa gắn số'}
+- Đơn vị ban hành: ${clientDoc.issuing_authority || 'ATTECH'}
+- Ngày văn bản: ${clientDoc.issue_date || 'Không rõ'}
+- Trạng thái: ${clientDoc.status || 'Văn bản từ Email / Drive'}
+--------------------------------------------------
+${clientDoc.extra_context || 'Thông tin văn bản dự thảo/công việc được chọn từ danh sách.'}
+==================================================`);
+          }
+        }
+      });
+    }
+
+    deepDocsContext = contextBlocks.join('\n\n');
 
     // 4. Danh mục tóm tắt các văn bản đang hiển thị trên bộ lọc
     const catalogContext = docs.length
