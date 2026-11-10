@@ -262,7 +262,28 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             <span className="text-[10px] leading-tight">Công việc</span>
           </Link>
 
-          {/* 3. ✨ Hỏi AI (Nút nổi bật ở chính giữa - 1 chạm mở ngay Chatbot) */}
+          {/* 3. 📊 GP-CC */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsAiOpen(false);
+              setMobileSheet((prev) => (prev === 'compliance' ? 'none' : 'compliance'));
+            }}
+            className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-xl transition-colors ${
+              mobileSheet === 'compliance' || (isComplianceActive && mobileSheet === 'none' && !isAiOpen)
+                ? isDeepAero
+                  ? 'text-sky-400 font-bold'
+                  : 'text-sky-600 font-bold'
+                : isDeepAero
+                  ? 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <BarChart3 className="w-5 h-5" />
+            <span className="text-[10px] leading-tight">GP-CC</span>
+          </button>
+
+          {/* 4. ✨ Hỏi AI (Nút nổi bật nằm ngoài cùng bên phải - 1 chạm mở ngay Chatbot) */}
           <div className="flex items-center justify-center">
             <button
               type="button"
@@ -302,27 +323,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
               </span>
             </button>
           </div>
-
-          {/* 4. 📊 GP-CC */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsAiOpen(false);
-              setMobileSheet((prev) => (prev === 'compliance' ? 'none' : 'compliance'));
-            }}
-            className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-xl transition-colors ${
-              mobileSheet === 'compliance' || (isComplianceActive && mobileSheet === 'none' && !isAiOpen)
-                ? isDeepAero
-                  ? 'text-sky-400 font-bold'
-                  : 'text-sky-600 font-bold'
-                : isDeepAero
-                  ? 'text-slate-400 hover:text-slate-200'
-                  : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <BarChart3 className="w-5 h-5" />
-            <span className="text-[10px] leading-tight">GP-CC</span>
-          </button>
         </div>
       </nav>
 
