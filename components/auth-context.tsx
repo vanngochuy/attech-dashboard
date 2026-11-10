@@ -19,6 +19,7 @@ import {
   Sparkles,
   ArrowRight,
 } from 'lucide-react';
+import { ATTECH_STATIONS } from '@/lib/stations';
 
 export type UserRole = 'admin' | 'user' | null;
 type FlightPhase = 'idle' | 'takeoff' | 'landing';
@@ -390,7 +391,7 @@ function AttechLoginGate({
   const [loginTab, setLoginTab] = useState<'staff' | 'admin'>('staff');
   const [staffPin, setStaffPin] = useState('');
   const [staffIdentity, setStaffIdentity] = useState('');
-  const [staffDept, setStaffDept] = useState('ALL');
+  const [staffDept, setStaffDept] = useState('Đài DVOR/DME Tuy Hòa');
   const [inputUser, setInputUser] = useState('');
   const [inputPass, setInputPass] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -399,11 +400,11 @@ function AttechLoginGate({
   const handleStaffSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!staffIdentity.trim()) {
-      setError('Vui lòng nhập Email công ty (@attech.com.vn) hoặc Họ tên cán bộ để ghi nhận truy cập.');
+      setError('Vui lòng nhập Tài khoản hoặc Email cán bộ.');
       return;
     }
     if (!staffPin.trim()) {
-      setError('Vui lòng nhập Mã truy cập nội bộ ATTECH (PIN) để mở khóa tra cứu.');
+      setError('Vui lòng nhập Mật khẩu truy cập (mặc định: 1234).');
       return;
     }
     setIsSubmitting(true);
@@ -411,7 +412,7 @@ function AttechLoginGate({
     try {
       const res = await onUserLogin(staffPin, staffIdentity, staffDept);
       if (!res.ok) {
-        setError(res.error || 'Mã truy cập nội bộ không chính xác.');
+        setError(res.error || 'Tài khoản hoặc mật khẩu không chính xác.');
       }
     } finally {
       setIsSubmitting(false);
@@ -671,7 +672,7 @@ function AttechLoginGate({
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Email công ty (@attech.com.vn) hoặc Họ tên <span className="text-rose-500">*</span>
+                  Tài khoản hoặc Email cán bộ <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -680,35 +681,31 @@ function AttechLoginGate({
                     setStaffIdentity(e.target.value);
                     setError(null);
                   }}
-                  placeholder="VD: tuh@attech.com.vn / Nguyễn Văn A"
+                  placeholder="VD: huyvn, hainh, linhct, hoanglm..."
                   className="w-full bg-white border border-sky-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-600/15 transition-all"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Phòng ban / Đơn vị chuyên môn (Phân quyền RLS)
+                  Đơn vị / Đài trạm (CNS / ATM)
                 </label>
                 <select
                   value={staffDept}
                   onChange={(e) => setStaffDept(e.target.value)}
                   className="w-full bg-white border border-sky-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-600/15 transition-all"
                 >
-                  <option value="ALL">Toàn công ty (Tra cứu tất cả chuyên ngành)</option>
-                  <option value="CNS">CNS (Thông tin - Dẫn đường - Giám sát)</option>
-                  <option value="QL_KY_THUAT">Quản lý Kỹ thuật (QLKT)</option>
-                  <option value="SMS">An toàn Hàng không (SMS)</option>
-                  <option value="CONG_TRINH_HK">Công trình Hàng không (CTHK)</option>
-                  <option value="CANG_HK">Cảng Hàng không (CHK)</option>
-                  <option value="QL_DAU_TU">Quản lý Đầu tư</option>
-                  <option value="QTCL">Quản lý Chất lượng (QTCL)</option>
-                  <option value="VB_PHAP_LUAT">Văn bản Pháp luật &amp; Quy chế</option>
+                  {ATTECH_STATIONS.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Mã truy cập nội bộ (PIN Công ty / Mật khẩu) <span className="text-rose-500">*</span>
+                  Mật khẩu truy cập <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="password"
@@ -717,7 +714,7 @@ function AttechLoginGate({
                     setStaffPin(e.target.value);
                     setError(null);
                   }}
-                  placeholder="Nhập mã PIN nội bộ ATTECH..."
+                  placeholder="Nhập mật khẩu (Mặc định: 1234)..."
                   className="w-full bg-white border border-sky-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-600/15 transition-all"
                 />
               </div>

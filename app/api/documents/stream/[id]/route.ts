@@ -145,11 +145,18 @@ export async function GET(
       }
     }
 
-    // Kiểm tra phân quyền theo Phòng ban (Row-Level Security cho file PDF)
+    // Kiểm tra phân quyền theo Phòng ban / Đài trạm (Row-Level Security cho file PDF)
     const userDept = session.departmentScope || 'ALL';
+    const isStationOrAll =
+      userDept === 'ALL' ||
+      userDept.startsWith('Đài ') ||
+      userDept.startsWith('Trạm ') ||
+      userDept.includes('Tuy Hòa') ||
+      userDept.includes('Cơ quan');
+
     if (
       session.role !== 'admin' &&
-      userDept !== 'ALL' &&
+      !isStationOrAll &&
       docDepts.length > 0 &&
       !docDepts.includes(userDept) &&
       !docDepts.includes('VB_PHAP_LUAT')
@@ -215,3 +222,4 @@ export async function GET(
     );
   }
 }
+

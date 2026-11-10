@@ -6,34 +6,21 @@ import {
 } from '@/lib/auth-session';
 import { getSupabaseClient } from '@/lib/supabase';
 import { recordAuditLog } from '@/lib/audit-log';
+import { TUY_HOA_STAFF_ACCOUNTS, ATTECH_STATIONS } from '@/lib/stations';
 
 export const dynamic = 'force-dynamic';
-
-// Bảng mã PIN riêng theo từng Phòng ban / Chuyên ngành (Nếu Admin cấu hình trên Vercel)
-function resolveDepartmentPinMap(): Record<string, string> {
-  return {
-    ALL: (process.env.ATTECH_STAFF_PIN || 'attech2026').trim(),
-    CNS: (process.env.ATTECH_PIN_CNS || '').trim(),
-    QL_KY_THUAT: (process.env.ATTECH_PIN_QLKT || '').trim(),
-    SMS: (process.env.ATTECH_PIN_SMS || '').trim(),
-    CONG_TRINH_HK: (process.env.ATTECH_PIN_CTHK || '').trim(),
-    CANG_HK: (process.env.ATTECH_PIN_CHK || '').trim(),
-    QL_DAU_TU: (process.env.ATTECH_PIN_DAUTU || '').trim(),
-    QTCL: (process.env.ATTECH_PIN_QTCL || '').trim(),
-    VB_PHAP_LUAT: (process.env.ATTECH_PIN_PLQC || '').trim(),
-  };
-}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const mode = body?.mode === 'admin' ? 'admin' : 'user';
 
-    // Đọc thông tin xác thực từ biến môi trường Server/Vercel (Tuyệt đối không lộ ở Client)
+    // Đọc thông tin xác thực từ biến môi trường Server/Vercel
     const adminUser = (process.env.ATTECH_ADMIN_USER || 'huyvn').trim().toLowerCase();
     const adminPassword = (process.env.ATTECH_ADMIN_PASSWORD || '1234').trim();
-    const staffPin = (process.env.ATTECH_STAFF_PIN || 'attech2026').trim();
+    const staffPin = (process.env.ATTECH_STAFF_PIN || '1234').trim();
 
+    // 1. Chế độ Đăng nhập Quản trị viên (Admin)
     if (mode === 'admin') {
       const inputUser = String(body?.username || '').trim().toLowerCase();
       const inputPass = String(body?.password || '').trim();
@@ -85,89 +72,111 @@ export async function POST(req: Request) {
       return res;
     }
 
-    // Chế độ Nhân viên ATTECH (Email @attech.com.vn + Phân quyền Phòng ban + Mã PIN / Supabase Auth)
-    const inputPin = String(body?.pin || '').trim();
+    // 2. Chế độ Nhân viên ATTECH (Xác thực theo Đài trạm & Nhân sự đài Tuy Hòa)
+    const inputPass = String(body?.pin || '').trim();
     const rawIdentity = String(body?.identity || '').trim();
-    const requestedDept = String(body?.departmentScope || 'ALL').trim() || 'ALL';
-    const staffIdentity = rawIdentity || 'Nhân viên ATTECH';
+    const requestedDept = String(body?.departmentScope || 'Đài DVOR/DME Tuy Hòa').trim();
 
-    if (!inputPin) {
+    if (!rawIdentity) {
       return NextResponse.json(
-        { error: 'Vui lòng nhập Mã truy cập nội bộ ATTECH (PIN) hoặc mật khẩu email.' },
+        { error: 'Vui lòng nhập Tài khoản hoặc Email cán bộ.' },
         { status: 400 }
       );
     }
 
-    // 1. Hỗ trợ xác thực qua Supabase Auth nếu nhân sự nhập email @attech.com.vn đã đăng ký trên Supabase
-    let authenticatedViaSupabase = false;
-    if (rawIdentity.includes('@')) {
-      try {
-        const supabase = getSupabaseClient();
-        if (supabase) {
-          const { data: supaAuth, error: supaErr } = await supabase.auth.signInWithPassword({
-            email: rawIdentity,
-            password: inputPin,
-          });
-          if (!supaErr && supaAuth?.user) {
-            authenticatedViaSupabase = true;
-          }
-        }
-      } catch {
-        // Fallback to PIN check
-      }
+    if (!inputPass) {
+      return NextResponse.json(
+        { error: 'Vui lòng nhập Mật khẩu truy cập (mặc định: 1234).' },
+        { status: 400 }
+      );
     }
 
-    // 2. Kiểm tra Mã PIN nội bộ (Hỗ trợ cả PIN chung công ty và PIN riêng theo từng Phòng ban)
-    const deptPinMap = resolveDepartmentPinMap();
-    const specificDeptPin = deptPinMap[requestedDept] || '';
+    // Chuẩn hóa mã tài khoản (ví dụ: huyvn@attech.com.vn -> huyvn)
+    const normalizedAccount = rawIdentity
+      .toLowerCase()
+      .replace(/@attech\.com\.vn$/, '')
+      .trim();
+
+    let authenticated = false;
+    let staffDisplayName = rawIdentity;
     let resolvedDeptScope = requestedDept;
 
-    // Nếu người dùng nhập một mã PIN khớp với một phòng ban cụ thể
-    let matchedSpecificDept: string | null = null;
-    for (const [deptKey, pinVal] of Object.entries(deptPinMap)) {
-      if (deptKey !== 'ALL' && pinVal && inputPin.toLowerCase() === pinVal.toLowerCase()) {
-        matchedSpecificDept = deptKey;
-        break;
+    // Kiểm tra nhân sự thuộc Đài DVOR/DME Tuy Hòa: huyvn, hainh, linhct, hoanglm
+    const tuyHoaMember = TUY_HOA_STAFF_ACCOUNTS[normalizedAccount];
+    if (tuyHoaMember) {
+      // Xác thực mật khẩu nhân sự Tuy Hòa (mặc định 1234)
+      if (inputPass === tuyHoaMember.defaultPass || inputPass === '1234' || inputPass === staffPin || inputPass === adminPassword) {
+        authenticated = true;
+        staffDisplayName = normalizedAccount;
+        resolvedDeptScope = 'Đài DVOR/DME Tuy Hòa';
+      } else {
+        await recordAuditLog(req, {
+          username: normalizedAccount,
+          role: 'anonymous',
+          department: 'Đài DVOR/DME Tuy Hòa',
+          action: 'LOGIN_FAILED',
+          details: `Đài DVOR/DME Tuy Hòa: Nhập sai mật khẩu cho tài khoản [${normalizedAccount}]`,
+        });
+        return NextResponse.json(
+          { error: `Mật khẩu không chính xác cho tài khoản cán bộ "${normalizedAccount}".` },
+          { status: 401 }
+        );
+      }
+    } else {
+      // 1. Thử xác thực qua Supabase Auth nếu là email
+      if (rawIdentity.includes('@')) {
+        try {
+          const supabase = getSupabaseClient();
+          if (supabase) {
+            const { data: supaAuth, error: supaErr } = await supabase.auth.signInWithPassword({
+              email: rawIdentity,
+              password: inputPass,
+            });
+            if (!supaErr && supaAuth?.user) {
+              authenticated = true;
+            }
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      // 2. Mật khẩu chuẩn cho các đài trạm / nhân viên khác
+      if (!authenticated) {
+        if (inputPass === '1234' || inputPass.toLowerCase() === staffPin.toLowerCase() || inputPass === adminPassword) {
+          authenticated = true;
+          staffDisplayName = normalizedAccount;
+        }
       }
     }
 
-    const isGeneralPinValid =
-      inputPin.toLowerCase() === staffPin.toLowerCase() ||
-      inputPin === adminPassword ||
-      (specificDeptPin && inputPin.toLowerCase() === specificDeptPin.toLowerCase()) ||
-      matchedSpecificDept !== null;
-
-    if (matchedSpecificDept && requestedDept === 'ALL') {
-      resolvedDeptScope = matchedSpecificDept;
-    }
-
-    if (!authenticatedViaSupabase && !isGeneralPinValid) {
+    if (!authenticated) {
       await recordAuditLog(req, {
-        username: staffIdentity,
+        username: rawIdentity,
         role: 'anonymous',
         department: requestedDept,
         action: 'LOGIN_FAILED',
-        details: `Nhập sai mã PIN nội bộ (Phòng ban: ${requestedDept})`,
+        details: `Nhập sai mật khẩu truy cập (Đài trạm: ${requestedDept})`,
       });
       return NextResponse.json(
-        { error: 'Mã truy cập nội bộ (PIN) không chính xác. Vui lòng liên hệ Quản trị viên ATTECH.' },
+        { error: 'Mật khẩu truy cập không chính xác. Mặc định là 1234.' },
         { status: 401 }
       );
     }
 
-    const token = await signAuthSession('user', staffIdentity, resolvedDeptScope);
+    const token = await signAuthSession('user', staffDisplayName, resolvedDeptScope);
     await recordAuditLog(req, {
-      username: staffIdentity,
+      username: staffDisplayName,
       role: 'user',
       department: resolvedDeptScope,
       action: 'LOGIN_SUCCESS',
-      details: `Đăng nhập tra cứu (Phạm vi chuyên ngành: ${resolvedDeptScope})`,
+      details: `Đăng nhập thành công (Đơn vị: ${resolvedDeptScope})`,
     });
 
     const res = NextResponse.json({
       success: true,
       role: 'user',
-      username: staffIdentity,
+      username: staffDisplayName,
       departmentScope: resolvedDeptScope,
     });
 

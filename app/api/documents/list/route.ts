@@ -41,10 +41,17 @@ export async function GET() {
 
     let docs = data || [];
 
-    // Phân quyền cấp độ dữ liệu (Row-Level Security) theo Phòng ban / Chuyên ngành:
-    // Nếu nhân viên đăng nhập theo 1 chuyên ngành cụ thể (VD: CNS), chỉ trả về văn bản thuộc chuyên ngành đó + Văn bản Pháp luật chung (VB_PHAP_LUAT)
+    // Phân quyền cấp độ dữ liệu (Row-Level Security) theo Phòng ban / Đài trạm:
+    // Cán bộ các Đài trạm (DVOR/DME, NDB, ADS-B...) và Toàn công ty được xem toàn bộ kho tài liệu kỹ thuật & pháp luật
     const userDeptScope = session?.departmentScope || 'ALL';
-    if (session && session.role !== 'admin' && userDeptScope !== 'ALL') {
+    const isStationOrAll =
+      userDeptScope === 'ALL' ||
+      userDeptScope.startsWith('Đài ') ||
+      userDeptScope.startsWith('Trạm ') ||
+      userDeptScope.includes('Tuy Hòa') ||
+      userDeptScope.includes('Cơ quan');
+
+    if (session && session.role !== 'admin' && !isStationOrAll) {
       docs = docs.filter((doc: any) => {
         const depts: string[] = Array.isArray(doc.department_access)
           ? doc.department_access
