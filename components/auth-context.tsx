@@ -23,7 +23,6 @@ import { ATTECH_STATIONS } from '@/lib/stations';
 import { VietnamStationsMap } from './vietnam-stations-map';
 
 export type UserRole = 'admin' | 'user' | null;
-type FlightPhase = 'idle' | 'takeoff' | 'landing';
 
 interface AuthContextValue {
   role: UserRole;
@@ -43,337 +42,6 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const STORAGE_KEY = 'attech_auth_session_v2';
-const ANIMATION_DURATION_MS = 2000; // 2 giây theo yêu cầu
-
-/**
- * Vector máy bay hàng không chuyên dụng (kiểu tàu bay hiệu chuẩn / phản lực ATTECH)
- */
-function AircraftSvg({ className = 'w-28 h-28' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 120 120" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="fuselageGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="60%" stopColor="#e0f2fe" />
-          <stop offset="100%" stopColor="#38bdf8" />
-        </linearGradient>
-        <linearGradient id="wingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#0284c7" />
-          <stop offset="100%" stopColor="#38bdf8" />
-        </linearGradient>
-        <linearGradient id="afterburner" x1="100%" y1="50%" x2="0%" y2="50%">
-          <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.95" />
-          <stop offset="40%" stopColor="#38bdf8" stopOpacity="0.7" />
-          <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {/* Luồng phản lực động cơ */}
-      <ellipse cx="18" cy="60" rx="16" ry="4" fill="url(#afterburner)" />
-      {/* Cánh chính */}
-      <path
-        d="M52 60 L34 18 L46 18 L72 56 Z"
-        fill="url(#wingGrad)"
-      />
-      <path
-        d="M52 60 L34 102 L46 102 L72 64 Z"
-        fill="url(#wingGrad)"
-      />
-      {/* Cánh đuôi */}
-      <path
-        d="M28 60 L16 38 L24 38 L36 57 Z"
-        fill="#0369a1"
-      />
-      <path
-        d="M28 60 L16 82 L24 82 L36 63 Z"
-        fill="#0369a1"
-      />
-      {/* Thân tàu bay */}
-      <path
-        d="M20 56 C45 54, 82 54, 105 60 C82 66, 45 66, 20 64 L15 60 Z"
-        fill="url(#fuselageGrad)"
-        stroke="#0284c7"
-        strokeWidth="1.5"
-      />
-      {/* Buồng lái (Cockpit) */}
-      <path
-        d="M86 57.5 C92 58, 97 59, 100 60 C97 61, 92 62, 86 62.5 C88 60.5, 88 59.5, 86 57.5 Z"
-        fill="#0f172a"
-      />
-      {/* Dải sơn nhận diện ATTECH trên thân */}
-      <path d="M30 60 L82 60" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" />
-      {/* Đèn dẫn đường đầu cánh */}
-      <circle cx="40" cy="19" r="2" fill="#ef4444" />
-      <circle cx="40" cy="101" r="2" fill="#22c55e" />
-    </svg>
-  );
-}
-
-/**
- * Màn hình hiệu ứng Máy bay CẤT CÁNH (Takeoff - 2 giây) khi đăng nhập thành công
- */
-function TakeoffOverlay({ targetRole, username }: { targetRole: UserRole; username: string | null }) {
-  return (
-    <div className="fixed inset-0 z-[100] overflow-hidden bg-gradient-to-b from-sky-950 via-sky-800 to-slate-900 flex flex-col justify-between select-none font-sans">
-      <style>{`
-        @keyframes attechTakeoffFlight {
-          0% {
-            transform: translate(-38vw, 28vh) rotate(0deg) scale(0.85);
-          }
-          32% {
-            transform: translate(-8vw, 26vh) rotate(-6deg) scale(0.95);
-          }
-          55% {
-            transform: translate(8vw, 10vh) rotate(-24deg) scale(1.08);
-          }
-          100% {
-            transform: translate(55vw, -38vh) rotate(-26deg) scale(1.25);
-          }
-        }
-        @keyframes attechContrail {
-          0% {
-            width: 0px;
-            opacity: 0;
-          }
-          30% {
-            width: 80px;
-            opacity: 0.5;
-          }
-          100% {
-            width: 420px;
-            opacity: 0.9;
-          }
-        }
-        @keyframes attechCloudRush {
-          0% {
-            transform: translateX(30vw) translateY(-10vh);
-            opacity: 0;
-          }
-          30% {
-            opacity: 0.35;
-          }
-          100% {
-            transform: translateX(-60vw) translateY(25vh);
-            opacity: 0;
-          }
-        }
-        @keyframes attechRunwayPass {
-          0% {
-            background-position: 0px 0px;
-          }
-          100% {
-            background-position: -900px 0px;
-          }
-        }
-      `}</style>
-
-      {/* Lớp mây lướt nhanh tạo cảm giác vút lên bầu trời */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div
-          className="absolute top-[18%] right-[10%] w-72 h-20 rounded-full bg-white/20 blur-xl"
-          style={{ animation: 'attechCloudRush 2s ease-in forwards' }}
-        />
-        <div
-          className="absolute top-[42%] right-[25%] w-96 h-24 rounded-full bg-sky-200/20 blur-2xl"
-          style={{ animation: 'attechCloudRush 1.8s ease-in 0.15s forwards' }}
-        />
-        <div
-          className="absolute top-[28%] right-[45%] w-64 h-16 rounded-full bg-white/15 blur-xl"
-          style={{ animation: 'attechCloudRush 1.6s ease-in 0.25s forwards' }}
-        />
-      </div>
-
-      {/* Header HUD Hàng không */}
-      <div className="relative z-10 p-6 flex items-center justify-between text-sky-100">
-        <div className="flex items-center gap-3 bg-slate-900/50 backdrop-blur-md px-4 py-2 rounded-xl border border-sky-400/30">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-          <span className="font-mono text-xs tracking-wider uppercase text-emerald-300 font-bold">
-            ATC CLEARANCE: CLEARED FOR TAKEOFF · RUNWAY 11R
-          </span>
-        </div>
-        <div className="font-mono text-xs text-sky-200 bg-slate-900/50 px-3.5 py-2 rounded-xl border border-sky-400/20">
-          ATTECH CNS/ATM FLIGHT DECK
-        </div>
-      </div>
-
-      {/* Trung tâm bầu trời: Máy bay tăng tốc và cất cánh vút lên */}
-      <div className="relative flex-1 flex items-center justify-center">
-        <div
-          className="relative flex items-center"
-          style={{ animation: 'attechTakeoffFlight 2s cubic-bezier(0.22, 0.8, 0.36, 1) forwards' }}
-        >
-          {/* Vệt khói trắng (Contrail) phía đuôi tàu bay */}
-          <div
-            className="h-2 rounded-full bg-gradient-to-l from-white/90 via-sky-200/50 to-transparent blur-[2px] -mr-6"
-            style={{ animation: 'attechContrail 2s ease-out forwards' }}
-          />
-          <div className="drop-shadow-[0_15px_35px_rgba(56,189,248,0.65)]">
-            <AircraftSvg className="w-32 h-32" />
-          </div>
-        </div>
-      </div>
-
-      {/* Đường băng ánh sáng bên dưới (Runway Lights) */}
-      <div className="relative z-10">
-        <div className="h-24 bg-slate-950/90 border-t-2 border-amber-400/60 relative overflow-hidden flex flex-col justify-center">
-          {/* Vạch kẻ tim đường băng chạy lùi cực nhanh */}
-          <div
-            className="w-full h-2 opacity-80"
-            style={{
-              backgroundImage: 'repeating-linear-gradient(90deg, #f8fafc 0px, #f8fafc 48px, transparent 48px, transparent 96px)',
-              animation: 'attechRunwayPass 0.9s linear infinite',
-            }}
-          />
-          {/* Đèn lề đường băng */}
-          <div className="absolute bottom-2 inset-x-0 flex justify-around px-4">
-            {Array.from({ length: 18 }).map((_, i) => (
-              <span
-                key={i}
-                className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_10px_#f59e0b]"
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Thanh thông báo trạng thái cất cánh */}
-        <div className="bg-slate-950 px-6 py-4 flex items-center justify-between border-t border-slate-800 text-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-sky-500/20 border border-sky-400/40 text-sky-300">
-              <PlaneTakeoff className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-sm font-bold tracking-wide text-white">
-                {targetRole === 'admin'
-                  ? `Chào mừng Quản trị viên (${username || 'huyvn'}) — Đang cất cánh vào Hệ thống Quản trị...`
-                  : 'Chào mừng Nhân viên ATTECH — Đang cất cánh vào Cổng Tra cứu & Trợ lý AI...'}
-              </div>
-              <div className="text-xs text-sky-300/80 font-mono">
-                SPEED: V1 ➔ VR ➔ V2 (CLIMBING) · ĐỒNG BỘ DỮ LIỆU SUPABASE & GOOGLE DRIVE
-              </div>
-            </div>
-          </div>
-          <div className="text-xs font-mono text-emerald-400 font-semibold">100% READY</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Màn hình hiệu ứng Máy bay HẠ CÁNH (Landing - 2 giây) khi đăng xuất / thoát ra
- */
-function LandingOverlay() {
-  return (
-    <div className="fixed inset-0 z-[100] overflow-hidden bg-gradient-to-b from-slate-950 via-sky-950 to-slate-900 flex flex-col justify-between select-none font-sans">
-      <style>{`
-        @keyframes attechLandingFlight {
-          0% {
-            transform: translate(-48vw, -32vh) rotate(14deg) scale(0.85);
-          }
-          55% {
-            transform: translate(-5vw, 24vh) rotate(5deg) scale(1.05);
-          }
-          72% {
-            transform: translate(10vw, 27vh) rotate(-4deg) scale(1.05);
-          }
-          100% {
-            transform: translate(28vw, 27vh) rotate(0deg) scale(1.05);
-          }
-        }
-        @keyframes attechTouchdownSmoke {
-          0%, 52% {
-            opacity: 0;
-            transform: scale(0.3);
-          }
-          65% {
-            opacity: 0.85;
-            transform: scale(1.2) translateX(-20px);
-          }
-          100% {
-            opacity: 0;
-            transform: scale(2.2) translateX(-70px);
-          }
-        }
-        @keyframes attechRunwaySlow {
-          0% {
-            background-position: 0px 0px;
-          }
-          100% {
-            background-position: -450px 0px;
-          }
-        }
-      `}</style>
-
-      {/* Header HUD Hạ cánh */}
-      <div className="relative z-10 p-6 flex items-center justify-between text-sky-100">
-        <div className="flex items-center gap-3 bg-slate-900/60 backdrop-blur-md px-4 py-2 rounded-xl border border-amber-400/30">
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-          <span className="font-mono text-xs tracking-wider uppercase text-amber-300 font-bold">
-            ILS APPROACH: GLIDE SLOPE ESTABLISHED · LANDING RUNWAY 11R
-          </span>
-        </div>
-        <div className="font-mono text-xs text-sky-200 bg-slate-900/60 px-3.5 py-2 rounded-xl border border-sky-400/20">
-          ATTECH CNS/ATM FLIGHT DECK
-        </div>
-      </div>
-
-      {/* Không gian máy bay hạ độ cao và đáp xuống đường băng */}
-      <div className="relative flex-1 flex items-center justify-center">
-        <div
-          className="relative flex items-center"
-          style={{ animation: 'attechLandingFlight 2s cubic-bezier(0.16, 1, 0.3, 1) forwards' }}
-        >
-          {/* Khói trắng ở bánh đáp khi chạm đường băng (Touchdown) */}
-          <div
-            className="absolute -bottom-3 left-8 w-20 h-8 rounded-full bg-white/80 blur-md"
-            style={{ animation: 'attechTouchdownSmoke 2s ease-out forwards' }}
-          />
-          <div className="drop-shadow-[0_12px_28px_rgba(14,165,233,0.5)]">
-            <AircraftSvg className="w-32 h-32" />
-          </div>
-        </div>
-      </div>
-
-      {/* Đường băng hạ cánh */}
-      <div className="relative z-10">
-        <div className="h-24 bg-slate-950 border-t-2 border-emerald-400/60 relative overflow-hidden flex flex-col justify-center">
-          <div
-            className="w-full h-2 opacity-75"
-            style={{
-              backgroundImage: 'repeating-linear-gradient(90deg, #f8fafc 0px, #f8fafc 48px, transparent 48px, transparent 96px)',
-              animation: 'attechRunwaySlow 1.6s ease-out forwards',
-            }}
-          />
-          <div className="absolute bottom-2 inset-x-0 flex justify-around px-4">
-            {Array.from({ length: 18 }).map((_, i) => (
-              <span
-                key={i}
-                className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981]"
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-slate-950 px-6 py-4 flex items-center justify-between border-t border-slate-800 text-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-amber-500/20 border border-amber-400/40 text-amber-300">
-              <PlaneLanding className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-sm font-bold tracking-wide text-white">
-                Đang hạ cánh an toàn & Đóng phiên làm việc...
-              </div>
-              <div className="text-xs text-slate-400 font-mono">
-                TOUCHDOWN CONFIRMED · Hẹn gặp lại trên Hệ thống Tài liệu ATTECH
-              </div>
-            </div>
-          </div>
-          <div className="text-xs font-mono text-amber-400 font-semibold">SAFE LANDING</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /**
  * Màn hình Cổng Đăng nhập toàn trang lấy cảm hứng từ https://attech.com.vn/
  * Bắt buộc xác thực phía Server (Cookie HttpOnly) cho cả Nhân viên (PIN nội bộ) và Quản trị viên (Admin)
@@ -722,8 +390,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [username, setUsername] = useState<string | null>(null);
   const [departmentScope, setDepartmentScope] = useState<string>('ALL');
   const [isHydrated, setIsHydrated] = useState(false);
-  const [flightPhase, setFlightPhase] = useState<FlightPhase>('idle');
-  const [pendingRole, setPendingRole] = useState<UserRole>(null);
 
   // Kiểm tra phiên đăng nhập thực tế từ Cookie HttpOnly trên Server (Chống giả mạo qua F12 localStorage)
   useEffect(() => {
@@ -755,19 +421,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const triggerTakeoff = (targetRole: 'admin' | 'user', targetName: string, dept = 'ALL') => {
-    setPendingRole(targetRole);
-    setUsername(targetName);
-    setDepartmentScope(dept);
-    setFlightPhase('takeoff');
-
-    setTimeout(() => {
-      setRole(targetRole);
-      setFlightPhase('idle');
-    }, ANIMATION_DURATION_MS);
-  };
-
-  const loginAdmin = async (
+const loginAdmin = async (
     user: string,
     pass: string
   ): Promise<{ ok: boolean; error?: string }> => {
@@ -786,7 +440,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok || !data?.success) {
         return { ok: false, error: data?.error || 'Tài khoản hoặc mật khẩu không chính xác.' };
       }
-      triggerTakeoff('admin', data.username || user.trim(), 'ALL');
+      setUsername(data.username || user.trim());
+      setDepartmentScope('ALL');
+      setRole('admin');
       return { ok: true };
     } catch {
       return { ok: false, error: 'Không thể kết nối máy chủ xác thực.' };
@@ -814,7 +470,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok || !data?.success) {
         return { ok: false, error: data?.error || 'Mã truy cập nội bộ (PIN) không chính xác.' };
       }
-      triggerTakeoff('user', data.username || 'Nhân viên ATTECH', data.departmentScope || deptScope);
+      setUsername(data.username || 'Nhân viên ATTECH');
+      setDepartmentScope(data.departmentScope || deptScope);
+      setRole('user');
       return { ok: true };
     } catch {
       return { ok: false, error: 'Không thể kết nối máy chủ xác thực.' };
@@ -822,21 +480,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    setFlightPhase('landing');
     try {
       fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
       localStorage.removeItem(STORAGE_KEY);
     } catch {
       // Ignore errors
     }
-
-    setTimeout(() => {
-      setRole(null);
-      setPendingRole(null);
-      setUsername(null);
-      setDepartmentScope('ALL');
-      setFlightPhase('idle');
-    }, ANIMATION_DURATION_MS);
+    setRole(null);
+    setUsername(null);
+    setDepartmentScope('ALL');
   };
 
   // Tránh nháy giao diện trước khi xác thực phiên từ Server
@@ -857,14 +509,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
       }}
     >
-      {/* Hiệu ứng Máy bay Cất cánh (2 giây) */}
-      {flightPhase === 'takeoff' && (
-        <TakeoffOverlay targetRole={pendingRole} username={username} />
-      )}
-
-      {/* Hiệu ứng Máy bay Hạ cánh (2 giây) */}
-      {flightPhase === 'landing' && <LandingOverlay />}
-
       {/* Nếu chưa đăng nhập -> Hiển thị Cổng Đăng nhập ATTECH */}
       {role === null ? (
         <AttechLoginGate onAdminLogin={loginAdmin} onUserLogin={loginAsUser} />
