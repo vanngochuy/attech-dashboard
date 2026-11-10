@@ -28,8 +28,8 @@ interface AuthContextValue {
   isAdmin: boolean;
   isAuthenticated: boolean;
   username: string | null;
-  loginAdmin: (user: string, pass: string) => boolean;
-  loginAsUser: () => void;
+  loginAdmin: (user: string, pass: string) => Promise<{ ok: boolean; error?: string }>;
+  loginAsUser: (pin: string, identity?: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -369,27 +369,56 @@ function LandingOverlay() {
 
 /**
  * Màn hình Cổng Đăng nhập toàn trang lấy cảm hứng từ https://attech.com.vn/
+ * Bắt buộc xác thực phía Server (Cookie HttpOnly) cho cả Nhân viên (PIN nội bộ) và Quản trị viên (Admin)
  */
 function AttechLoginGate({
   onAdminLogin,
-  onUserQuickAccess,
+  onUserLogin,
 }: {
-  onAdminLogin: (u: string, p: string) => boolean;
-  onUserQuickAccess: () => void;
+  onAdminLogin: (u: string, p: string) => Promise<{ ok: boolean; error?: string }>;
+  onUserLogin: (pin: string, identity?: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
+  const [loginTab, setLoginTab] = useState<'staff' | 'admin'>('staff');
+  const [staffPin, setStaffPin] = useState('');
+  const [staffIdentity, setStaffIdentity] = useState('');
   const [inputUser, setInputUser] = useState('');
   const [inputPass, setInputPass] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleStaffSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputUser.trim()) {
-      setError('Vui lòng nhập tài khoản Quản trị viên.');
+    if (!staffPin.trim()) {
+      setError('Vui lòng nhập Mã truy cập nội bộ ATTECH (PIN) để mở khóa tra cứu.');
       return;
     }
-    const ok = onAdminLogin(inputUser, inputPass);
-    if (!ok) {
-      setError('Tài khoản hoặc mật khẩu Admin không chính xác.');
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const res = await onUserLogin(staffPin, staffIdentity);
+      if (!res.ok) {
+        setError(res.error || 'Mã truy cập nội bộ không chính xác.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputUser.trim() || !inputPass.trim()) {
+      setError('Vui lòng nhập đầy đủ Tài khoản và Mật khẩu Quản trị viên.');
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const res = await onAdminLogin(inputUser, inputPass);
+      if (!res.ok) {
+        setError(res.error || 'Tài khoản hoặc mật khẩu Admin không chính xác.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -561,100 +590,161 @@ function AttechLoginGate({
               </span>
             </h2>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Chọn chế độ truy cập nhanh dành cho Nhân viên tra cứu hoặc đăng nhập tài khoản Quản trị viên.
+              Hệ thống bảo mật nội bộ ATTECH. Vui lòng nhập Mã truy cập Nhân viên hoặc tài khoản Quản trị viên.
             </p>
           </div>
 
-          {/* CÁCH 1: Nút vào nhanh cổng Tra cứu dành cho Nhân viên (1 chạm -> Cất cánh) */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-50 to-indigo-50/70 border border-sky-200/90 shadow-xs space-y-3">
-            <div className="flex items-start justify-between gap-2">
+          {/* Chuyển đổi 2 chế độ đăng nhập: Nhân viên ATTECH (PIN) vs Quản trị viên (Admin) */}
+          <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => {
+                setLoginTab('staff');
+                setError(null);
+              }}
+              className={`flex items-center justify-center gap-1.5 py-2 rounded-lg transition-all cursor-pointer ${
+                loginTab === 'staff'
+                  ? 'bg-white text-sky-700 shadow-xs border border-slate-200/80'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Nhân viên ATTECH</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginTab('admin');
+                setError(null);
+              }}
+              className={`flex items-center justify-center gap-1.5 py-2 rounded-lg transition-all cursor-pointer ${
+                loginTab === 'admin'
+                  ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Quản trị (Admin)</span>
+            </button>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {loginTab === 'staff' ? (
+            /* TAB 1: Cổng Tra cứu Nhân viên (Bắt buộc nhập Mã truy cập nội bộ PIN) */
+            <form
+              onSubmit={handleStaffSubmit}
+              className="p-4 rounded-2xl bg-gradient-to-br from-sky-50 to-indigo-50/70 border border-sky-200/90 shadow-xs space-y-3.5"
+            >
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                  <User className="w-4 h-4" />
+                  <Lock className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-xs font-bold text-slate-900">
-                    Cổng Tra cứu Nhân viên (User)
+                    Xác thực Nội bộ Nhân viên ATTECH
                   </h3>
                   <p className="text-[11px] text-slate-600">
-                    Xem tài liệu, lọc chuyên môn &amp; hỏi Chatbot AI
+                    Nhập Mã truy cập nội bộ (PIN) để tra cứu văn bản &amp; hỏi AI
                   </p>
                 </div>
               </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={onUserQuickAccess}
-              className="w-full py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 active:scale-[0.99] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-sky-600/25 transition-all cursor-pointer group"
-            >
-              <PlaneTakeoff className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-              <span>Vào cổng Tra cứu dành cho Nhân viên</span>
-              <ArrowRight className="w-3.5 h-3.5 ml-0.5 opacity-80" />
-            </button>
-          </div>
-
-          {/* Đường phân cách */}
-          <div className="relative flex items-center justify-center">
-            <div className="border-t border-slate-200 w-full" />
-            <span className="bg-white px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
-              Hoặc Đăng nhập Quản trị (Admin)
-            </span>
-            <div className="border-t border-slate-200 w-full" />
-          </div>
-
-          {/* Form Đăng nhập Admin (huyvn / 1234) */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs animate-in fade-in">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{error}</span>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Họ tên hoặc Email @attech.com.vn (Tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  value={staffIdentity}
+                  onChange={(e) => setStaffIdentity(e.target.value)}
+                  placeholder="VD: Nguyễn Văn A / anv@attech.com.vn"
+                  className="w-full bg-white border border-sky-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-600/15 transition-all"
+                />
               </div>
-            )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                Tài khoản Quản trị viên
-              </label>
-              <input
-                type="text"
-                value={inputUser}
-                onChange={(e) => {
-                  setInputUser(e.target.value);
-                  setError(null);
-                }}
-                placeholder="Nhập tài khoản Admin..."
-                className="w-full bg-slate-50 focus:bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/15 transition-all"
-              />
-            </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Mã truy cập nội bộ (PIN Công ty) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={staffPin}
+                  onChange={(e) => {
+                    setStaffPin(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="Nhập mã PIN nội bộ ATTECH..."
+                  className="w-full bg-white border border-sky-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-600/15 transition-all"
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                Mật khẩu
-              </label>
-              <input
-                type="password"
-                value={inputPass}
-                onChange={(e) => {
-                  setInputPass(e.target.value);
-                  setError(null);
-                }}
-                placeholder="••••••••"
-                className="w-full bg-slate-50 focus:bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/15 transition-all"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-600/25 transition-all cursor-pointer group"
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-60 active:scale-[0.99] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-sky-600/25 transition-all cursor-pointer group"
+              >
+                <PlaneTakeoff className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                <span>{isSubmitting ? 'Đang xác thực...' : 'Mở khóa Cổng Tra cứu (Cất cánh)'}</span>
+                <ArrowRight className="w-3.5 h-3.5 ml-0.5 opacity-80" />
+              </button>
+            </form>
+          ) : (
+            /* TAB 2: Form Đăng nhập Quản trị viên (Xác thực trên Server) */
+            <form
+              onSubmit={handleAdminSubmit}
+              className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 shadow-xs space-y-3.5"
             >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Đăng nhập Quản trị viên (Cất cánh)</span>
-            </button>
-          </form>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Tài khoản Quản trị viên
+                </label>
+                <input
+                  type="text"
+                  value={inputUser}
+                  onChange={(e) => {
+                    setInputUser(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="Nhập tài khoản Admin..."
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/15 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Mật khẩu Quản trị
+                </label>
+                <input
+                  type="password"
+                  value={inputPass}
+                  onChange={(e) => {
+                    setInputPass(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="••••••••"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/15 transition-all"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 active:scale-[0.99] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-600/25 transition-all cursor-pointer group"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>{isSubmitting ? 'Đang xác thực...' : 'Đăng nhập Quản trị viên (Cất cánh)'}</span>
+              </button>
+            </form>
+          )}
 
           <div className="pt-2 text-center text-[11px] text-slate-400">
-            © {new Date().getFullYear()} ATTECH · Hệ thống Quản lý Tài liệu &amp; Tri thức số
+            © {new Date().getFullYear()} ATTECH · Bảo mật Phiên làm việc (HttpOnly Cookie)
           </div>
         </div>
       </div>
@@ -669,24 +759,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [flightPhase, setFlightPhase] = useState<FlightPhase>('idle');
   const [pendingRole, setPendingRole] = useState<UserRole>(null);
 
+  // Kiểm tra phiên đăng nhập thực tế từ Cookie HttpOnly trên Server (Chống giả mạo qua F12 localStorage)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.role === 'admin' && parsed?.username === 'huyvn') {
-          setRole('admin');
-          setUsername('huyvn');
-        } else if (parsed?.role === 'user') {
-          setRole('user');
-          setUsername('Nhân viên ATTECH');
+    let mounted = true;
+    async function checkServerSession() {
+      try {
+        const res = await fetch('/api/auth/me', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (mounted && data?.authenticated && (data.role === 'admin' || data.role === 'user')) {
+            setRole(data.role);
+            setUsername(data.username || (data.role === 'admin' ? 'Admin' : 'Nhân viên ATTECH'));
+          }
         }
+      } catch {
+        // Ignore network errors on initial check
+      } finally {
+        if (mounted) setIsHydrated(true);
       }
-    } catch {
-      // Ignore storage errors
-    } finally {
-      setIsHydrated(true);
     }
+    checkServerSession();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const triggerTakeoff = (targetRole: 'admin' | 'user', targetName: string) => {
@@ -694,46 +793,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUsername(targetName);
     setFlightPhase('takeoff');
 
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          role: targetRole,
-          username: targetName,
-          loginAt: new Date().toISOString(),
-        })
-      );
-    } catch {
-      // Ignore storage errors
-    }
-
     setTimeout(() => {
       setRole(targetRole);
       setFlightPhase('idle');
     }, ANIMATION_DURATION_MS);
   };
 
-  const loginAdmin = (user: string, pass: string): boolean => {
-    const cleanUser = user.trim().toLowerCase();
-    const cleanPass = pass.trim();
-
-    if (cleanUser === 'huyvn' && cleanPass === '1234') {
-      triggerTakeoff('admin', 'huyvn');
-      return true;
+  const loginAdmin = async (
+    user: string,
+    pass: string
+  ): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          mode: 'admin',
+          username: user,
+          password: pass,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        return { ok: false, error: data?.error || 'Tài khoản hoặc mật khẩu không chính xác.' };
+      }
+      triggerTakeoff('admin', data.username || user.trim());
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Không thể kết nối máy chủ xác thực.' };
     }
-    return false;
   };
 
-  const loginAsUser = () => {
-    triggerTakeoff('user', 'Nhân viên ATTECH');
+  const loginAsUser = async (
+    pin: string,
+    identity?: string
+  ): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          mode: 'user',
+          pin,
+          identity: identity?.trim() || 'Nhân viên ATTECH',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        return { ok: false, error: data?.error || 'Mã truy cập nội bộ (PIN) không chính xác.' };
+      }
+      triggerTakeoff('user', data.username || 'Nhân viên ATTECH');
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Không thể kết nối máy chủ xác thực.' };
+    }
   };
 
   const logout = () => {
     setFlightPhase('landing');
     try {
+      fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
       localStorage.removeItem(STORAGE_KEY);
     } catch {
-      // Ignore storage errors
+      // Ignore errors
     }
 
     setTimeout(() => {
@@ -744,7 +868,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, ANIMATION_DURATION_MS);
   };
 
-  // Tránh nháy giao diện trước khi đọc localStorage
+  // Tránh nháy giao diện trước khi xác thực phiên từ Server
   if (!isHydrated) {
     return <div className="fixed inset-0 bg-slate-950" />;
   }
@@ -771,7 +895,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       {/* Nếu chưa đăng nhập -> Hiển thị Cổng Đăng nhập ATTECH */}
       {role === null ? (
-        <AttechLoginGate onAdminLogin={loginAdmin} onUserQuickAccess={loginAsUser} />
+        <AttechLoginGate onAdminLogin={loginAdmin} onUserLogin={loginAsUser} />
       ) : (
         children
       )}
