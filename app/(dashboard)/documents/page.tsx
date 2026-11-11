@@ -541,7 +541,9 @@ function DocumentsContent() {
     const code = (doc.document_code || '').trim();
     const issuer = (doc.issuing_authority || '').trim();
     const date = doc.issue_date;
-    return !code || !issuer || !date;
+    if (!code || !issuer) return true;
+    if (!date && !code.startsWith('HD-') && !code.startsWith('DOC-')) return true;
+    return false;
   }, []);
 
   // Đếm số lượng file chưa hiển đủ metadata
@@ -576,7 +578,7 @@ function DocumentsContent() {
 
       setScanNotification({
         type: 'success',
-        text: `Quét AI (2 trang đầu) thành công: Số hiệu [${data.metadata?.document_code || 'Không có'}], Cơ quan [${data.metadata?.issuing_authority || 'Không có'}], Ngày [${data.metadata?.issue_date || 'Chưa rõ'}].`,
+        text: `Quét AI (2 trang đầu) thành công: Tên [${data.metadata?.file_name || doc.file_name}], Số hiệu [${data.metadata?.document_code || 'Không có'}], Cơ quan [${data.metadata?.issuing_authority || 'Không có'}], Ngày [${data.metadata?.issue_date || 'Chưa rõ'}].`,
       });
     } catch (err: any) {
       console.error('Lỗi quét AI tài liệu:', err);
