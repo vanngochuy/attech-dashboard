@@ -39,7 +39,8 @@ import {
   Ban,
   Bot,
   X,
-  GitCompareArrows
+  GitCompareArrows,
+  Pencil
 } from 'lucide-react';
 import UploadDocumentModal from '@/components/upload-document-modal';
 import EditDocumentModal from '@/components/edit-document-modal';
@@ -92,7 +93,7 @@ function toYMD(val?: string | null): string {
   }
 }
 
-type InlineField = 'document_code' | 'issuing_authority' | 'issue_date' | 'department_access';
+type InlineField = 'file_name' | 'document_code' | 'issuing_authority' | 'issue_date' | 'department_access';
 
 function InlineEditable({
   docId,
@@ -267,6 +268,10 @@ function DocumentsContent() {
     }
 
     const trimmed = newValue.trim();
+    if (field === 'file_name' && !trimmed) {
+      setInlineEdit(null);
+      return;
+    }
     const currentValue = field === 'department_access'
       ? (targetDoc.department_access?.[0] || 'QL_KY_THUAT')
       : (targetDoc[field] || '');
@@ -1593,6 +1598,18 @@ function DocumentsContent() {
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            {/* 0. [✏️ Sửa] (Chỉ Admin) */}
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => setEditingDoc(doc)}
+                                className="w-8 h-8 rounded-full bg-slate-100 active:bg-slate-200 text-slate-600 border border-slate-200 flex items-center justify-center hover:text-indigo-600"
+                                title="Chỉnh sửa tên văn bản & metadata"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
                             {/* 1. [👁️ Xem PDF] */}
                             <button
                               type="button"
@@ -1654,7 +1671,7 @@ function DocumentsContent() {
                       <span className="w-24 sm:w-28 text-center">NGÀY BAN HÀNH</span>
                       <span className="w-32 text-center hidden lg:inline">CHUYÊN MÔN</span>
                       <span className="w-28 text-center hidden sm:inline">HIỆU LỰC</span>
-                      <span className={`${isAdmin ? 'w-20' : 'w-10'} text-center`}></span>
+                      <span className={`${isAdmin ? 'w-28' : 'w-10'} text-center`}></span>
                     </div>
                   </div>
 
@@ -1690,16 +1707,36 @@ function DocumentsContent() {
                           >
                             <div className="shrink-0 mt-0.5">{getFileIcon(doc.file_name)}</div>
                             <div className="min-w-0 flex-1">
-                              <span
-                                className={`text-xs font-semibold block whitespace-normal break-words lg:truncate ${isMissingOnDrive
-                                    ? 'text-slate-400 line-through decoration-rose-500/50'
-                                    : isSuperseded
-                                      ? 'text-slate-600 group-hover/title:text-indigo-600 group-hover/title:underline'
-                                      : 'text-slate-900 group-hover/title:text-indigo-600 group-hover/title:underline'
-                                  } transition-colors`}
-                              >
-                                {doc.file_name}
-                              </span>
+                              <InlineEditable
+                                docId={doc.id}
+                                field="file_name"
+                                type="text"
+                                currentValue={doc.file_name || ''}
+                                activeEdit={inlineEdit}
+                                setActiveEdit={setInlineEdit}
+                                onSave={handleSaveInline}
+                                containerClassName="w-full"
+                                inputClassName="w-full text-xs font-semibold px-2 py-1 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-900 shadow-xs"
+                                displayNode={
+                                  <span
+                                    className={`text-xs font-semibold block whitespace-normal break-words lg:truncate ${isMissingOnDrive
+                                        ? 'text-slate-400 line-through decoration-rose-500/50'
+                                        : isSuperseded
+                                          ? 'text-slate-600 group-hover/title:text-indigo-600 group-hover/title:underline'
+                                          : 'text-slate-900 group-hover/title:text-indigo-600 group-hover/title:underline'
+                                      } transition-colors select-none`}
+                                    onDoubleClick={(e) => {
+                                      if (isAdmin) {
+                                        e.stopPropagation();
+                                        setInlineEdit({ docId: doc.id, field: 'file_name', value: doc.file_name || '' });
+                                      }
+                                    }}
+                                    title={isAdmin ? `Nhấn để xem trước | Nhấn đúp (Double-click) để sửa tên: ${doc.file_name}` : `Nhấn để xem trước: ${doc.file_name}`}
+                                  >
+                                    {doc.file_name}
+                                  </span>
+                                }
+                              />
                               {aiSnippet && (
                                 <div className="mt-1 flex items-start gap-1.5 text-[11px] text-indigo-950 bg-indigo-50/90 px-2 py-0.5 rounded border border-indigo-200/70 max-w-2xl">
                                   <Sparkles className="w-3 h-3 text-indigo-600 shrink-0 mt-0.5" />
@@ -1865,11 +1902,23 @@ function DocumentsContent() {
                               )}
                             </span>
 
-                            {/* Cột Thao tác: Quét AI (Chỉ Admin) & Chatbot AI ở cuối */}
+                            {/* Cột Thao tác: Sửa metadata (Chỉ Admin) & Quét AI (Chỉ Admin) & Chatbot AI ở cuối */}
                             <div
-                              className={`${isAdmin ? 'w-20' : 'w-10'} flex items-center justify-end gap-1 shrink-0`}
+                              className={`${isAdmin ? 'w-28' : 'w-10'} flex items-center justify-end gap-1 shrink-0`}
                               onClick={(e) => e.stopPropagation()}
                             >
+                              {/* Nút Chỉnh sửa Metadata toàn diện (Chỉ Admin) */}
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingDoc(doc)}
+                                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+                                  title="Chỉnh sửa tên văn bản, số hiệu, ngày ban hành, lĩnh vực..."
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                              )}
+
                               {/* Nút Quét AI (Chỉ Admin mới nhìn thấy và sử dụng) đặt TRƯỚC icon Chatbot */}
                               {isAdmin && (
                                 <button
@@ -1955,18 +2004,37 @@ function DocumentsContent() {
                           <div className="p-2 rounded-lg bg-white border border-slate-200 shadow-xs shrink-0">
                             {getFileIcon(doc.file_name)}
                           </div>
-                          <div className="min-w-0">
-                            <h4
-                              className={`text-xs font-bold truncate ${isMissingOnDrive
-                                  ? 'line-through text-slate-400'
-                                  : isSuperseded
-                                    ? 'text-slate-600 group-hover/title:text-indigo-600 group-hover/title:underline'
-                                    : 'text-slate-900 group-hover/title:text-indigo-600 group-hover/title:underline'
-                                } transition-colors`}
-                              title={doc.file_name}
-                            >
-                              {doc.file_name}
-                            </h4>
+                          <div className="min-w-0 flex-1">
+                            <InlineEditable
+                              docId={doc.id}
+                              field="file_name"
+                              type="text"
+                              currentValue={doc.file_name || ''}
+                              activeEdit={inlineEdit}
+                              setActiveEdit={setInlineEdit}
+                              onSave={handleSaveInline}
+                              containerClassName="w-full"
+                              inputClassName="w-full text-xs font-bold px-1.5 py-0.5 bg-white border border-indigo-400 rounded focus:outline-hidden focus:ring-2 focus:ring-indigo-300 text-slate-900 shadow-xs"
+                              displayNode={
+                                <h4
+                                  className={`text-xs font-bold truncate ${isMissingOnDrive
+                                      ? 'line-through text-slate-400'
+                                      : isSuperseded
+                                        ? 'text-slate-600 group-hover/title:text-indigo-600 group-hover/title:underline'
+                                        : 'text-slate-900 group-hover/title:text-indigo-600 group-hover/title:underline'
+                                    } transition-colors select-none`}
+                                  onDoubleClick={(e) => {
+                                    if (isAdmin) {
+                                      e.stopPropagation();
+                                      setInlineEdit({ docId: doc.id, field: 'file_name', value: doc.file_name || '' });
+                                    }
+                                  }}
+                                  title={isAdmin ? `Nhấn để xem trước | Nhấn đúp (Double-click) để sửa: ${doc.file_name}` : doc.file_name}
+                                >
+                                  {doc.file_name}
+                                </h4>
+                              }
+                            />
                             <div className="flex items-center gap-2 mt-0.5">
                               {isSuperseded ? (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
@@ -1985,11 +2053,23 @@ function DocumentsContent() {
                           </div>
                         </div>
 
-                        {/* Quick action: Icon Quét AI (Chỉ Admin) + Icon Bot */}
+                        {/* Quick action: Icon Sửa (Chỉ Admin) + Icon Quét AI (Chỉ Admin) + Icon Bot */}
                         <div
                           className="flex items-center gap-1 shrink-0"
                           onClick={(e) => e.stopPropagation()}
                         >
+                          {/* Nút Chỉnh sửa Metadata toàn diện (Chỉ Admin) */}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingDoc(doc)}
+                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+                              title="Chỉnh sửa tên văn bản, số hiệu, ngày ban hành..."
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+
                           {/* Nút Quét AI (Chỉ Admin mới nhìn thấy và sử dụng) đặt TRƯỚC icon Chatbot */}
                           {isAdmin && (
                             <button
