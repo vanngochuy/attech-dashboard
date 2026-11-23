@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -208,27 +209,12 @@ function DocumentsContent() {
   const [batchScanProgress, setBatchScanProgress] = useState<{ current: number; total: number } | null>(null);
   const [isDbConfigured, setIsDbConfigured] = useState(true);
 
-  // Menu tùy chọn Xuất báo cáo Excel (Dành cho Admin)
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-        setIsExportMenuOpen(false);
-      }
-    };
-    if (isExportMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isExportMenuOpen]);
+  // Trạng thái Modal Xuất báo cáo Excel (Dành cho Admin)
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Hàm xử lý xuất báo cáo Excel cho Admin
   const handleExportExcel = (mode: 'ACTIVE_ONLY' | 'ALL') => {
-    setIsExportMenuOpen(false);
+    setIsExportModalOpen(false);
     try {
       const targetList = documents.filter((d) => mode === 'ALL' || d.status !== 'SUPERSEDED');
 
@@ -902,65 +888,24 @@ function DocumentsContent() {
               </button>
             )}
 
-            {/* Admin Xuất Báo cáo Danh mục Excel */}
+            {/* Admin Xuất Báo cáo Danh mục Excel (Nút mở Hộp thoại Modal) */}
             {isAdmin && (
-              <div className="relative" ref={exportMenuRef}>
-                <button
-                  onClick={() => setIsExportMenuOpen((prev) => !prev)}
-                  disabled={isLoading || documents.length === 0}
-                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs disabled:opacity-50 cursor-pointer ${
-                    isDeepAero
-                      ? 'glass-pill-deep-aero'
-                      : 'bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] backdrop-blur-[35px]'
-                  }`}
-                  title="Admin: Xuất danh mục báo cáo tài liệu ra file Excel"
-                >
-                  <span className={`p-0.5 rounded ${isDeepAero ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/50 border border-white/60 text-emerald-700'}`}>
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                  </span>
-                  <span className="hidden sm:inline font-semibold">Xuất Excel</span>
-                </button>
-
-                {isExportMenuOpen && (
-                  <div className="absolute right-0 mt-1.5 w-64 rounded-xl bg-white/95 backdrop-blur-md shadow-2xl border border-slate-200 py-1.5 z-50 text-xs animate-in fade-in slide-in-from-top-1">
-                    <div className="px-3.5 py-2 border-b border-slate-100 font-bold text-slate-800 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 text-slate-700">
-                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                        Xuất báo cáo Excel
-                      </span>
-                      <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono">.xlsx</span>
-                    </div>
-
-                    <div className="p-1 space-y-0.5">
-                      <button
-                        onClick={() => handleExportExcel('ACTIVE_ONLY')}
-                        className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-emerald-50/80 text-slate-700 flex flex-col gap-0.5 cursor-pointer transition-colors group"
-                      >
-                        <span className="font-semibold text-emerald-700 flex items-center gap-1.5 group-hover:text-emerald-800">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          Chỉ tài liệu CÒN HIỆU LỰC
-                        </span>
-                        <span className="text-[11px] text-slate-500 pl-5">
-                          {documents.filter((d) => d.status !== 'SUPERSEDED').length} văn bản đang áp dụng
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={() => handleExportExcel('ALL')}
-                        className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-sky-50/80 text-slate-700 flex flex-col gap-0.5 cursor-pointer transition-colors group border-t border-slate-100"
-                      >
-                        <span className="font-semibold text-slate-800 flex items-center gap-1.5 group-hover:text-sky-700">
-                          <Layers className="w-3.5 h-3.5 text-sky-600" />
-                          Xuất TẤT CẢ tài liệu
-                        </span>
-                        <span className="text-[11px] text-slate-500 pl-5">
-                          {documents.length} văn bản (gồm cả Đã thay thế)
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(true)}
+                disabled={isLoading || documents.length === 0}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs disabled:opacity-50 cursor-pointer ${
+                  isDeepAero
+                    ? 'glass-pill-deep-aero'
+                    : 'bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] backdrop-blur-[35px]'
+                }`}
+                title="Admin: Mở hộp thoại xuất danh mục báo cáo tài liệu ra file Excel"
+              >
+                <span className={`p-0.5 rounded ${isDeepAero ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/50 border border-white/60 text-emerald-700'}`}>
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                </span>
+                <span className="hidden sm:inline font-semibold">Xuất Excel</span>
+              </button>
             )}
 
             {/* Refresh button (Glassmorphism) */}
@@ -1341,6 +1286,18 @@ function DocumentsContent() {
                   <span>Chưa đọc AI ({incompleteMetaCount})</span>
                 </button>
               )}
+
+              {/* Nút Xuất Excel trên Mobile cho Admin */}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setIsExportModalOpen(true)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all border bg-emerald-50 text-emerald-800 border-emerald-300 cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Xuất Excel</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1355,6 +1312,20 @@ function DocumentsContent() {
                 {filteredDocuments.length}/{documents.length}
               </span>
             </h3>
+
+            {/* Nút Xuất Excel trên thanh công cụ Danh sách cho Admin */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(true)}
+                disabled={isLoading || documents.length === 0}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition-all shadow-2xs cursor-pointer ml-1"
+                title="Admin: Mở hộp thoại xuất báo cáo danh mục ra file Excel"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Xuất Excel</span>
+              </button>
+            )}
 
             {(activeFilter !== 'ALL' ||
               issuerFilter !== 'ALL' ||
@@ -2736,6 +2707,92 @@ function DocumentsContent() {
           fileId={previewDoc}
           onClose={() => setPreviewDoc(null)}
         />
+      )}
+
+      {/* Modal Xuất Báo cáo Danh mục Excel cho Admin (Render qua createPortal vào document.body để luôn nổi lên trên cùng với z-[9999]) */}
+      {isExportModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all animate-in zoom-in-95 duration-150">
+            {/* Header Modal */}
+            <div className="px-5 py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-xs">
+                  <FileSpreadsheet className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Xuất báo cáo danh mục (Excel)</h3>
+                  <p className="text-[11px] text-emerald-100">Chọn phạm vi tài liệu cần trích xuất</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(false)}
+                className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Đóng"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body Modal with 2 options */}
+            <div className="p-5 space-y-3">
+              <button
+                type="button"
+                onClick={() => handleExportExcel('ACTIVE_ONLY')}
+                className="w-full text-left p-3.5 rounded-xl border-2 border-emerald-200 hover:border-emerald-500 bg-emerald-50/50 hover:bg-emerald-50 transition-all flex items-start gap-3 group cursor-pointer shadow-xs"
+              >
+                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0 mt-0.5">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-emerald-950 text-sm">Chỉ tài liệu CÒN HIỆU LỰC</span>
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">
+                      {documents.filter((d) => d.status !== 'SUPERSEDED').length} file
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Trích xuất các văn bản đang có giá trị thi hành để báo cáo hoặc đối soát danh mục.
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleExportExcel('ALL')}
+                className="w-full text-left p-3.5 rounded-xl border-2 border-slate-200 hover:border-sky-500 bg-slate-50/50 hover:bg-sky-50/50 transition-all flex items-start gap-3 group cursor-pointer shadow-xs"
+              >
+                <div className="p-2 rounded-lg bg-slate-100 text-slate-700 group-hover:bg-sky-600 group-hover:text-white transition-colors shrink-0 mt-0.5">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900 text-sm">Xuất TẤT CẢ tài liệu</span>
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 bg-slate-200 text-slate-800 rounded-full">
+                      {documents.length} file
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Bao gồm cả tài liệu Còn hiệu lực và ĐÃ THAY THẾ để phục vụ kiểm tra toàn diện.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <span>Định dạng file: <strong className="text-slate-700">Microsoft Excel (.xlsx)</strong></span>
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(false)}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 font-semibold text-slate-700 transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
