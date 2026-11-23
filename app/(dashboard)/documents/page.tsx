@@ -1,6 +1,7 @@
 'use client';
 
-import { Suspense, useState, useEffect, useMemo, useCallback } from 'react';
+import { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search,
@@ -206,6 +207,89 @@ function DocumentsContent() {
   const [isBatchScanningAi, setIsBatchScanningAi] = useState(false);
   const [batchScanProgress, setBatchScanProgress] = useState<{ current: number; total: number } | null>(null);
   const [isDbConfigured, setIsDbConfigured] = useState(true);
+
+  // Menu tùy chọn Xuất báo cáo Excel (Dành cho Admin)
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    if (isExportMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isExportMenuOpen]);
+
+  // Hàm xử lý xuất báo cáo Excel cho Admin
+  const handleExportExcel = (mode: 'ACTIVE_ONLY' | 'ALL') => {
+    setIsExportMenuOpen(false);
+    try {
+      const targetList = documents.filter((d) => mode === 'ALL' || d.status !== 'SUPERSEDED');
+
+      if (targetList.length === 0) {
+        alert('Không có tài liệu nào phù hợp để xuất báo cáo.');
+        return;
+      }
+
+      const rows = targetList.map((doc, idx) => {
+        const deptObj = DEPARTMENTS.find((dep) => dep.id === doc.department_access?.[0]);
+        const deptName = deptObj ? deptObj.label : doc.department_access?.[0] || 'Chung';
+        const isSup = doc.status === 'SUPERSEDED';
+        const driveUrl = doc.drive_file_id
+          ? `https://drive.google.com/file/d/${doc.drive_file_id}/view`
+          : '';
+
+        return {
+          'STT': idx + 1,
+          'Số / Ký hiệu': doc.document_code || '---',
+          'Tên văn bản / Trích yếu': doc.file_name || '---',
+          'Cơ quan ban hành': doc.issuing_authority || '---',
+          'Ngày ban hành': doc.issue_date || '---',
+          'Chuyên môn / Lĩnh vực': deptName,
+          'Trạng thái hiệu lực': isSup ? 'ĐÃ THAY THẾ' : 'CÒN HIỆU LỰC',
+          'Tình trạng OCR': doc.ocr_content ? 'Đã có OCR' : 'Chưa có OCR',
+          'Đường dẫn xem trên Google Drive': driveUrl,
+          'Ngày nạp hệ thống': doc.created_at
+            ? new Date(doc.created_at).toLocaleDateString('vi-VN')
+            : '---',
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+
+      // Căn chỉnh độ rộng các cột tối ưu cho việc in ấn và đọc trên Excel
+      worksheet['!cols'] = [
+        { wch: 6 },  // STT
+        { wch: 22 }, // Số / Ký hiệu
+        { wch: 45 }, // Tên văn bản / Trích yếu
+        { wch: 25 }, // Cơ quan ban hành
+        { wch: 14 }, // Ngày ban hành
+        { wch: 25 }, // Chuyên môn / Lĩnh vực
+        { wch: 18 }, // Trạng thái hiệu lực
+        { wch: 18 }, // Tình trạng OCR
+        { wch: 48 }, // Đường dẫn xem trên Google Drive
+        { wch: 18 }, // Ngày nạp hệ thống
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Danh mục tài liệu');
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const suffix = mode === 'ACTIVE_ONLY' ? 'CON_HIEU_LUC' : 'TAT_CA';
+      const fileName = `Bao_cao_danh_muc_tai_lieu_ATTECH_${suffix}_${dateStr}.xlsx`;
+
+      XLSX.writeFile(workbook, fileName);
+    } catch (err: any) {
+      console.error('Lỗi xuất báo cáo Excel:', err);
+      alert('Không thể xuất file Excel: ' + (err.message || 'Lỗi không xác định'));
+    }
+  };
 
   // Trạng thái Tìm kiếm ngữ nghĩa bằng AI (Tìm AI)
   const [isAiSearchMode, setIsAiSearchMode] = useState(false);
@@ -816,6 +900,67 @@ function DocumentsContent() {
                 </span>
                 <span className="hidden sm:inline font-semibold">{isScanningDrive ? 'Đang quét...' : 'Quét Drive'}</span>
               </button>
+            )}
+
+            {/* Admin Xuất Báo cáo Danh mục Excel */}
+            {isAdmin && (
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  onClick={() => setIsExportMenuOpen((prev) => !prev)}
+                  disabled={isLoading || documents.length === 0}
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs disabled:opacity-50 cursor-pointer ${
+                    isDeepAero
+                      ? 'glass-pill-deep-aero'
+                      : 'bg-white/40 hover:bg-white/55 border border-white/60 hover:border-white/80 text-[#0f2043] backdrop-blur-[35px]'
+                  }`}
+                  title="Admin: Xuất danh mục báo cáo tài liệu ra file Excel"
+                >
+                  <span className={`p-0.5 rounded ${isDeepAero ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/50 border border-white/60 text-emerald-700'}`}>
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                  </span>
+                  <span className="hidden sm:inline font-semibold">Xuất Excel</span>
+                </button>
+
+                {isExportMenuOpen && (
+                  <div className="absolute right-0 mt-1.5 w-64 rounded-xl bg-white/95 backdrop-blur-md shadow-2xl border border-slate-200 py-1.5 z-50 text-xs animate-in fade-in slide-in-from-top-1">
+                    <div className="px-3.5 py-2 border-b border-slate-100 font-bold text-slate-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-slate-700">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                        Xuất báo cáo Excel
+                      </span>
+                      <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono">.xlsx</span>
+                    </div>
+
+                    <div className="p-1 space-y-0.5">
+                      <button
+                        onClick={() => handleExportExcel('ACTIVE_ONLY')}
+                        className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-emerald-50/80 text-slate-700 flex flex-col gap-0.5 cursor-pointer transition-colors group"
+                      >
+                        <span className="font-semibold text-emerald-700 flex items-center gap-1.5 group-hover:text-emerald-800">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Chỉ tài liệu CÒN HIỆU LỰC
+                        </span>
+                        <span className="text-[11px] text-slate-500 pl-5">
+                          {documents.filter((d) => d.status !== 'SUPERSEDED').length} văn bản đang áp dụng
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => handleExportExcel('ALL')}
+                        className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-sky-50/80 text-slate-700 flex flex-col gap-0.5 cursor-pointer transition-colors group border-t border-slate-100"
+                      >
+                        <span className="font-semibold text-slate-800 flex items-center gap-1.5 group-hover:text-sky-700">
+                          <Layers className="w-3.5 h-3.5 text-sky-600" />
+                          Xuất TẤT CẢ tài liệu
+                        </span>
+                        <span className="text-[11px] text-slate-500 pl-5">
+                          {documents.length} văn bản (gồm cả Đã thay thế)
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Refresh button (Glassmorphism) */}
