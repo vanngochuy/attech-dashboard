@@ -70,6 +70,7 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
     isPotentialSuperseded: false,
   });
   const [replacementMode, setReplacementMode] = useState<'REPLACE' | 'STANDALONE'>('REPLACE');
+  const [allowBypassDuplicate, setAllowBypassDuplicate] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -218,8 +219,8 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
       return;
     }
 
-    if (duplicateInfo.isExactDuplicate) {
-      setError('Tài liệu này đã tồn tại trên hệ thống (Trùng lặp). Không thể tải lên.');
+    if (duplicateInfo.isExactDuplicate && !allowBypassDuplicate) {
+      setError('Tài liệu này đã tồn tại trên hệ thống (Trùng lặp). Vui lòng tích chọn xác nhận nếu đây là văn bản khác.');
       return;
     }
 
@@ -369,8 +370,17 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
                     </div>
                   )}
                   <div className="text-[10px] text-rose-600 italic">
-                    * Hệ thống tạm khóa nút tải lên để bảo vệ tính toàn vẹn dữ liệu và tránh trùng lặp.
+                    * Nếu đây là 2 văn bản khác nhau (khác năm hoặc cùng số hiệu nhưng nội dung độc lập), bạn có thể tích chọn bên dưới để tiếp tục tải lên:
                   </div>
+                  <label className="flex items-center gap-2 pt-1 text-xs font-semibold text-rose-950 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={allowBypassDuplicate}
+                      onChange={(e) => setAllowBypassDuplicate(e.target.checked)}
+                      className="w-4 h-4 rounded border-rose-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                    />
+                    <span>Tôi xác nhận đây là văn bản khác độc lập (Mở khóa tải lên)</span>
+                  </label>
                 </div>
               )}
 
@@ -650,9 +660,9 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
                 </button>
                 <button
                   type="submit"
-                  disabled={isUploading || isScanning || !file || duplicateInfo.isExactDuplicate}
+                  disabled={isUploading || isScanning || !file || (duplicateInfo.isExactDuplicate && !allowBypassDuplicate)}
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-semibold text-white transition-all shadow-sm ${
-                    duplicateInfo.isExactDuplicate
+                    duplicateInfo.isExactDuplicate && !allowBypassDuplicate
                       ? 'bg-rose-600 cursor-not-allowed opacity-60'
                       : duplicateInfo.isPotentialSuperseded && replacementMode === 'REPLACE'
                       ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/30 active:scale-95'
@@ -664,10 +674,10 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       Đang tải lên n8n...
                     </>
-                  ) : duplicateInfo.isExactDuplicate ? (
+                  ) : duplicateInfo.isExactDuplicate && !allowBypassDuplicate ? (
                     <>
                       <Ban className="w-3.5 h-3.5" />
-                      Trùng lặp (Không thể tải)
+                      Trùng lặp (Tích mở khóa để tải)
                     </>
                   ) : duplicateInfo.isPotentialSuperseded && replacementMode === 'REPLACE' ? (
                     <>
@@ -677,7 +687,7 @@ export default function UploadDocumentModal({ isOpen, onClose, onSuccess }: Uplo
                   ) : (
                     <>
                       <Plus className="w-3.5 h-3.5" />
-                      Tải lên hệ thống
+                      {allowBypassDuplicate && duplicateInfo.isExactDuplicate ? 'Xác nhận & Tải lên' : 'Tải lên hệ thống'}
                     </>
                   )}
                 </button>

@@ -14,6 +14,27 @@ const ADMIN_STOPWORDS = new Set([
   'sổ', 'tay', 'hồ', 'sơ', 'danh', 'mục', 'chuẩn', 'mẫu', 'phương', 'án'
 ]);
 
+// Hàm chuẩn hóa định dạng ngày sang YYYY-MM-DD
+function normalizeDateStr(val?: string | null): string {
+  if (!val) return '';
+  const str = String(val).trim();
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymdMatch) {
+    const yyyy = ymdMatch[1];
+    const mm = ymdMatch[2].padStart(2, '0');
+    const dd = ymdMatch[3].padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    const dd = dmyMatch[1].padStart(2, '0');
+    const mm = dmyMatch[2].padStart(2, '0');
+    const yyyy = dmyMatch[3];
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  return str;
+}
+
 // Hàm chuẩn hóa tên cơ quan ban hành (xử lý từ viết tắt phổ biến)
 function normalizeIssuer(issuer: string): string {
   const s = issuer.toLowerCase().trim();
@@ -115,30 +136,60 @@ export async function POST(request: Request) {
     }
 
     // 1. KIỂM TRA TRÙNG LẶP HOÀN TOÀN (EXACT DUPLICATE)
+    // Theo quy chế văn thư hành chính, số ký hiệu văn bản bắt đầu lại từ ngày 1/1 hàng năm
+    // nên việc trùng số hiệu giữa các năm khác nhau hoặc khác ngày ban hành là hoàn toàn bình thường.
+    const inputDate = normalizeDateStr(cleanDate);
+
     for (const doc of existingDocs) {
       const docCode = (doc.document_code || '').trim().toLowerCase();
       const docTitle = (doc.file_name || '').trim().toLowerCase();
       const docIssuer = (doc.issuing_authority || '').trim().toLowerCase();
-      const docDate = (doc.issue_date || '').trim();
+      const docDate = normalizeDateStr(doc.issue_date);
 
-      // Tiêu chuẩn 1: Trùng Số / Ký hiệu văn bản (nếu số hiệu dài >= 3 ký tự)
+      // So sánh đơn vị ban hành
+      const isIssuerSimilar =
+        !cleanIssuer ||
+        !docIssuer ||
+        cleanIssuer.includes(docIssuer) ||
+        docIssuer.includes(cleanIssuer) ||
+        (normalizeIssuer(cleanIssuer) === normalizeIssuer(docIssuer) && normalizeIssuer(cleanIssuer).length >= 3);
+
+      // Độ tương đồng nội dung cốt lõi của trích yếu/tiêu đề
+      const similarity = computeSubjectSimilarity(cleanTitle, docTitle);
+      const isTitleSimilar = similarity >= 0.5 || docTitle.includes(cleanTitle) || cleanTitle.includes(docTitle);
+
       const isCodeMatch = cleanCode.length >= 3 && docCode === cleanCode;
+      const bothHaveDates = inputDate.length >= 8 && docDate.length >= 8;
+      const isSameDate = bothHaveDates && inputDate === docDate;
+      const isDifferentDate = bothHaveDates && inputDate !== docDate;
 
-      // Tiêu chuẩn 2: Trùng cả Tên + Đơn vị ban hành + Ngày ban hành
+      // NGUYÊN TẮC VÀNG: Nếu cả 2 đều có ngày ban hành và KHÁC NHAU -> TUYỆT ĐỐI KHÔNG TRÙNG LẶP
+      if (isDifferentDate) {
+        continue;
+      }
+
+      // TH1: Cùng Số hiệu + CÙNG NGÀY BAN HÀNH + Đơn vị tương đồng
+      const isExactCodeAndDateMatch = isCodeMatch && isSameDate && isIssuerSimilar;
+
+      // TH2: Cùng Số hiệu + (1 trong 2 thiếu ngày) + Đơn vị tương đồng + Nội dung trích yếu tương đồng
+      const isCodeAndTitleMatchNoDate = isCodeMatch && !bothHaveDates && isTitleSimilar && isIssuerSimilar;
+
+      // TH3: Trùng cả Tiêu đề + Đơn vị ban hành + Ngày ban hành (dành cho văn bản không có số hiệu hoặc khác số)
       const isFullIdentityMatch =
-        cleanTitle.length > 3 &&
+        cleanTitle.length > 5 &&
         cleanIssuer.length > 1 &&
-        cleanDate.length > 5 &&
-        docTitle.includes(cleanTitle.toLowerCase()) &&
-        docIssuer.includes(cleanIssuer) &&
-        docDate === cleanDate;
+        isSameDate &&
+        (docTitle.includes(cleanTitle) || cleanTitle.includes(docTitle)) &&
+        isIssuerSimilar;
 
-      if (isCodeMatch || isFullIdentityMatch) {
+      if (isExactCodeAndDateMatch || isCodeAndTitleMatchNoDate || isFullIdentityMatch) {
         return NextResponse.json({
           isExactDuplicate: true,
-          reason: isCodeMatch
-            ? `Trùng Số / Ký hiệu văn bản: "${doc.document_code}"`
-            : `Trùng Tiêu đề, Đơn vị và Ngày ban hành: ${cleanDate}`,
+          reason: isExactCodeAndDateMatch
+            ? `Trùng Số / Ký hiệu "${doc.document_code}", cùng Ngày ban hành (${docDate}) và cùng Đơn vị ban hành.`
+            : isCodeAndTitleMatchNoDate
+            ? `Trùng Số / Ký hiệu "${doc.document_code}", cùng Đơn vị ban hành và nội dung tương đồng.`
+            : `Trùng Tiêu đề, Đơn vị và Ngày ban hành: ${docDate}`,
           exactDuplicateDoc: doc,
           isPotentialSuperseded: false,
         });
