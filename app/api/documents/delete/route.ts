@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       const rawWebhook = cleanEnv(process.env.N8N_WEBHOOK_URL);
       const n8nBaseUrl = rawWebhook
         ? rawWebhook.replace('/document-upload', '/document-delete')
-        : 'http://localhost:5678/webhook/document-delete';
+        : 'https://docs-n8n.bbm.io.vn/webhook/document-delete';
 
       const n8nDeleteUrl = cleanEnv(process.env.N8N_DELETE_WEBHOOK_URL) || n8nBaseUrl;
 

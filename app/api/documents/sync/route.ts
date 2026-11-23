@@ -6,10 +6,10 @@ export async function POST(request: Request) {
     const rawWebhook = cleanEnv(process.env.N8N_WEBHOOK_URL);
     const derivedSyncUrl = rawWebhook
       ? rawWebhook.replace('/document-upload', '/sync-drive-health')
-      : 'http://localhost:5678/webhook/sync-drive-health';
+      : 'https://docs-n8n.bbm.io.vn/webhook/sync-drive-health';
     const prodWebhookUrl = cleanEnv(process.env.N8N_SYNC_WEBHOOK_URL) || derivedSyncUrl;
     const testWebhookUrl = prodWebhookUrl.replace('/webhook/', '/webhook-test/');
-    const fallbackWebhookUrl = 'http://localhost:5678/webhook/drive-sync-audit';
+    const fallbackWebhookUrl = prodWebhookUrl.replace('/sync-drive-health', '/drive-sync-audit');
 
     // 1. Thử gửi tới Production Webhook
     let n8nRes = await fetch(prodWebhookUrl, {
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   } catch (err: any) {
     console.error('[Sync API] Lỗi kết nối n8n:', err);
     return NextResponse.json(
-      { error: 'Không thể kết nối tới n8n (http://localhost:5678). Hãy kiểm tra Docker n8n đang chạy.' },
+      { error: `Không thể kết nối tới n8n (${prodWebhookUrl}): ${err.message || 'Lỗi mạng hoặc server không phản hồi'}` },
       { status: 500 }
     );
   }

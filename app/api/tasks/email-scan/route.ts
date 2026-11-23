@@ -314,9 +314,12 @@ export async function POST(req: Request) {
     //    và đối chiếu lại toàn bộ với bảng `document_files` thật trên Supabase
     if (action === 'SCAN_DATE_RANGE' || action === 'SYNC_DRIVE_FOLDER') {
       // Gọi luồng n8n `ATTECH - Email PDF Scanner (tuh@attech.com.vn) -> 03_TAI_LIEU_CHUA_XAC_THUC` (ID: CNLUQWWnkPHYRTRB)
+      const rawWebhook = cleanEnv(process.env.N8N_WEBHOOK_URL);
+      const defaultScanUrl = rawWebhook
+        ? rawWebhook.replace('/document-upload', '/scan-email-pdf')
+        : 'https://docs-n8n.bbm.io.vn/webhook/scan-email-pdf';
       const n8nEmailWebhook =
-        cleanEnv(process.env.N8N_EMAIL_SCAN_WEBHOOK_URL) ||
-        'http://localhost:5678/webhook/scan-email-pdf';
+        cleanEnv(process.env.N8N_EMAIL_SCAN_WEBHOOK_URL) || defaultScanUrl;
       let n8nFetchedCount = 0;
 
       if (n8nEmailWebhook) {
