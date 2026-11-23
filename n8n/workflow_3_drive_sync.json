@@ -1,7 +1,16 @@
 {
   "name": "ATTECH - Scheduled & Manual Drive Sync",
+  "active": false,
   "nodes": [
     {
+      "id": "4347f4d2-8f6b-4b1a-8a25-757fff410f1b",
+      "name": "1. Lập lịch mỗi đêm (00:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -464,
+        -96
+      ],
       "parameters": {
         "rule": {
           "interval": [
@@ -11,56 +20,48 @@
             }
           ]
         }
-      },
-      "id": "schedule-trigger",
-      "name": "1. Lập lịch mỗi đêm (00:00)",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.4,
-      "position": [
-        -464,
-        -96
-      ]
+      }
     },
     {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "sync-drive-health",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "id": "webhook-manual-sync",
+      "id": "203eb5eb-ae83-497a-9a0f-e056c9b193d4",
       "name": "2. Webhook (Admin bấm Quét trên Web)",
+      "webhookId": "2a429d99-5d34-477d-85ea-227eaa5a4072",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.2,
       "position": [
         -464,
         96
-      ]
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sync-drive-health",
+        "responseMode": "responseNode",
+        "options": {}
+      }
     },
     {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT id, file_name, drive_file_id FROM document_files WHERE drive_file_id IS NOT NULL LIMIT 500;",
-        "options": {}
-      },
-      "id": "pg-get-files",
+      "id": "19660768-d1bf-4d57-b592-608a386ff7fc",
       "name": "Lấy danh sách file (Supabase)1",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
         -208,
         -16
-      ]
-    },
-    {
+      ],
       "parameters": {
-        "method": "GET",
-        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.drive_file_id }}?fields=id,name,trashed",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleDriveOAuth2Api",
+        "operation": "executeQuery",
+        "query": "SELECT id, file_name, drive_file_id FROM document_files WHERE drive_file_id IS NOT NULL LIMIT 500;",
         "options": {}
       },
-      "id": "gdrive-check",
+      "credentials": {
+        "postgres": {
+          "id": "fiEFomFKDWUZhAMd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "4a58618d-32df-4f47-bb79-557ffdd63f97",
       "name": "Kiểm tra file trên Google Drive",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
@@ -68,85 +69,111 @@
       "position": [
         16,
         -16
-      ]
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "method": "GET",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {},
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.drive_file_id }}?fields=id,name,trashed"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "o1SAcd4jFT5mUM1C",
+          "name": "Google Drive account"
+        }
+      }
     },
     {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "check-error-or-trashed",
-              "leftValue": "={{ $json.error !== undefined || $json.trashed === true }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "if-error",
+      "id": "cd792239-45a6-45bd-8841-583d27e2d082",
       "name": "File đã bị xóa hoặc lỗi 404?1",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
         240,
         -16
-      ]
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-error",
+              "leftValue": "={{ $json.trashed === true || ($json.error !== undefined && ($json.details?.httpCode === 404 || ($json.error?.message && $json.error.message.includes('404')))) }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": 1
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      }
     },
     {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "=UPDATE document_files\nSET sync_status = 'missing_on_drive'\nWHERE id = '{{ $('Lấy danh sách file (Supabase)1').item.json.id }}';",
-        "options": {}
-      },
-      "id": "pg-mark-warning",
+      "id": "24490d8a-ce13-408f-9896-5752732ac884",
       "name": "Đánh dấu Cảnh báo (Supabase)1",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
         464,
         -96
-      ]
-    },
-    {
+      ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "=UPDATE document_files\nSET sync_status = 'synced'\nWHERE id = '{{ $('Lấy danh sách file (Supabase)1').item.json.id }}'\n  AND sync_status != 'synced';",
+        "query": "=UPDATE document_files\nSET sync_status = 'missing_on_drive'\nWHERE id = '{{ $('Lấy danh sách file (Supabase)1').item.json.id }}';",
         "options": {}
       },
-      "id": "pg-restore-synced",
+      "credentials": {
+        "postgres": {
+          "id": "fiEFomFKDWUZhAMd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "ae7cd9c8-56c4-4b50-afb3-fd9db7a00493",
       "name": "Khôi phục trạng thái Hợp lệ (Supabase)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
         464,
         96
-      ]
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "=UPDATE document_files\nSET sync_status = 'synced'\nWHERE id = '{{ $('Lấy danh sách file (Supabase)1').item.json.id }}'\n  AND sync_status != 'synced';"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "fiEFomFKDWUZhAMd",
+          "name": "Postgres account"
+        }
+      }
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { success: true, message: 'Hoàn tất quét đối soát toàn vẹn file Google Drive và Supabase' } }}",
-        "options": {}
-      },
-      "id": "respond-sync",
+      "id": "7b17fa51-a02c-4e5e-98bf-1936a1488ff0",
       "name": "Phản hồi kết quả về Web",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
         704,
         0
-      ]
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, message: 'Hoàn tất quét đối soát toàn vẹn file Google Drive và Supabase' } }}",
+        "options": {}
+      }
     }
   ],
   "connections": {
