@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search,
@@ -239,7 +239,6 @@ function DocumentsContent() {
           'Ngày ban hành': doc.issue_date || '---',
           'Chuyên môn / Lĩnh vực': deptName,
           'Trạng thái hiệu lực': isSup ? 'ĐÃ THAY THẾ' : 'CÒN HIỆU LỰC',
-          'Tình trạng OCR': doc.ocr_content ? 'Đã có OCR' : 'Chưa có OCR',
           'Đường dẫn xem trên Google Drive': driveUrl,
           'Ngày nạp hệ thống': doc.created_at
             ? new Date(doc.created_at).toLocaleDateString('vi-VN')
@@ -253,15 +252,73 @@ function DocumentsContent() {
       worksheet['!cols'] = [
         { wch: 6 },  // STT
         { wch: 22 }, // Số / Ký hiệu
-        { wch: 45 }, // Tên văn bản / Trích yếu
+        { wch: 50 }, // Tên văn bản / Trích yếu
         { wch: 25 }, // Cơ quan ban hành
-        { wch: 14 }, // Ngày ban hành
+        { wch: 15 }, // Ngày ban hành
         { wch: 25 }, // Chuyên môn / Lĩnh vực
         { wch: 18 }, // Trạng thái hiệu lực
-        { wch: 18 }, // Tình trạng OCR
-        { wch: 48 }, // Đường dẫn xem trên Google Drive
+        { wch: 50 }, // Đường dẫn xem trên Google Drive
         { wch: 18 }, // Ngày nạp hệ thống
       ];
+
+      // Áp dụng định dạng: Font Times New Roman, kẻ khung và cỡ chữ
+      if (worksheet['!ref']) {
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        const borderStyle = {
+          top: { style: 'thin', color: { rgb: '000000' } },
+          bottom: { style: 'thin', color: { rgb: '000000' } },
+          left: { style: 'thin', color: { rgb: '000000' } },
+          right: { style: 'thin', color: { rgb: '000000' } },
+        };
+
+        // 1. Dòng tiêu đề các cột (Header Row R = 0): Times New Roman, Size 14, Tô đậm, Căn giữa, Có khung
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cellAddr = XLSX.utils.encode_cell({ r: 0, c: C });
+          if (worksheet[cellAddr]) {
+            worksheet[cellAddr].s = {
+              font: {
+                name: 'Times New Roman',
+                sz: 14,
+                bold: true,
+                color: { rgb: '000000' },
+              },
+              alignment: {
+                horizontal: 'center',
+                vertical: 'center',
+                wrapText: true,
+              },
+              fill: {
+                fgColor: { rgb: 'D9E1F2' }, // Xanh lam pastel trang nhã
+              },
+              border: borderStyle,
+            };
+          }
+        }
+
+        // 2. Các dòng dữ liệu (Data Rows R >= 1): Times New Roman, Size 12, Có khung
+        for (let R = 1; R <= range.e.r; ++R) {
+          for (let C = range.s.c; C <= range.e.c; ++C) {
+            const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+            if (worksheet[cellAddr]) {
+              // Căn giữa cho STT (0), Số hiệu (1), Ngày (4), Hiệu lực (6), Ngày nạp (8); căn trái cho Tên (2), Đơn vị (3), Lĩnh vực (5), Link (7)
+              const isCenterCol = C === 0 || C === 1 || C === 4 || C === 6 || C === 8;
+              worksheet[cellAddr].s = {
+                font: {
+                  name: 'Times New Roman',
+                  sz: 12,
+                  color: { rgb: '000000' },
+                },
+                alignment: {
+                  horizontal: isCenterCol ? 'center' : 'left',
+                  vertical: 'center',
+                  wrapText: true,
+                },
+                border: borderStyle,
+              };
+            }
+          }
+        }
+      }
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Danh mục tài liệu');
