@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PDFDocument } from 'pdf-lib';
 import { cleanEnv } from '@/lib/supabase';
-import { executeWithGeminiKeyRotation, getAllGeminiApiKeys } from '@/lib/gemini-keys';
+import { executeWithModelFallback, getAllGeminiApiKeys } from '@/lib/gemini-keys';
 
 export const maxDuration = 30;
 
@@ -80,6 +80,7 @@ export async function POST(request: Request) {
     const prompt =
       mode === 'license'
         ? `Bạn là chuyên gia thẩm định Giấy phép khai thác thiết bị hàng không, Giấy phép sử dụng tần số vô tuyến điện và Chứng nhận kỹ thuật CNS tại Việt Nam.
+TÊN TẬP TIN ĐÍNH KÈM: "${fileName}".
 Hãy đọc kỹ trang đầu (và trang 2 nếu có) của giấy phép đính kèm và trích xuất chính xác các thông tin sau:
 1. title: Tên đầy đủ của Giấy phép / Giấy chứng nhận kèm tên đài/trạm hoặc thiết bị (Ví dụ: "Giấy phép sử dụng tần số và thiết bị vô tuyến điện (DVOR/DME)", "Giấy phép khai thác cơ sở cung cấp dịch vụ bảo đảm hoạt động bay", "Giấy chứng nhận đủ điều kiện kỹ thuật thiết bị VOR/DME Tuy Hòa").
 2. document_code: Số giấy phép / Số ký hiệu trên giấy phép (Ví dụ: "125/GP-CTS", "GP-AW-24", "458/GP-CHK"). Nếu không có thì để chuỗi rỗng.
@@ -87,12 +88,27 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) của giấy phép đính 
 4. issue_date: Ngày cấp phép theo định dạng YYYY-MM-DD. Nếu không thấy thì để chuỗi rỗng.
 5. expiry_date: Ngày hết hạn / Có giá trị đến ngày theo định dạng YYYY-MM-DD (Ví dụ: "Có giá trị đến ngày 27 tháng 02 năm 2028" -> "2028-02-27"). Nếu giấy phép ghi "Vô thời hạn" hoặc không giới hạn thời hạn thì trả về chuỗi rỗng "".
 6. is_permanent: true nếu giấy phép có hiệu lực vô thời hạn / không xác định thời hạn, ngược lại false.`
-        : `Bạn là chuyên gia thẩm định và phân loại văn bản hành chính Việt Nam theo chuẩn Nghị định 30/2020/NĐ-CP.
-Hãy đọc kỹ trang đầu (và trang 2 nếu có) của tài liệu đính kèm và trích xuất chính xác các thông tin quan trọng sau:
-1. title: Tên loại văn bản và trích yếu nội dung văn bản (Ví dụ: "Quyết định về việc kiện toàn Ban chỉ huy PCTT&TKCN của Công ty" hoặc "Thông tư quy định về kiểm tra an toàn kỹ thuật...").
-2. document_code: Số và ký hiệu văn bản (Ví dụ: "749/QĐ-KTQLB", "03/2009/NĐ-CP"). Nếu không có thì để chuỗi rỗng.
+        : `Bạn là chuyên gia thẩm định và phân loại văn bản hành chính Việt Nam theo chuẩn Nghị định 30/2020/NĐ-CP của Công ty TNHH Kỹ thuật Quản lý bay (ATTECH).
+
+THÔNG TIN FILE GỐC (File-Name Grounding):
+- Tên tập tin người dùng tải lên: "${fileName}"
+(LƯU Ý: Tên file thường phản ánh chính xác số hiệu hoặc tên viết tắt của văn bản, hãy đối chiếu chéo tên file này với nội dung hình ảnh để trích xuất số hiệu chuẩn xác nhất!)
+
+HƯỚNG DẪN QUAN TRỌNG VỀ NHẬN DIỆN CHỮ VIẾT TAY & SỐ HIỆU VĂN BẢN (document_code):
+1. Vị trí số hiệu: Nằm ở góc trên bên trái văn bản, ngay dưới tên cơ quan ban hành (Ví dụ: "Số: ...../QĐ-KTQLB" hoặc "Số: .../2024/NĐ-CP").
+2. Xử lý nét viết tay đè lên dòng chấm lửng (......): Trong thực tế, các văn bản hành chính in sẵn dòng chấm lửng, sau đó văn thư dùng bút viết tay số (ví dụ: viết tay "514", "125", "749" đè lên các dấu chấm). BẠN PHẢI nhìn kỹ các nét bút viết tay, KHÔNG ĐƯỢC nhầm dấu chấm với dấu gạch ngang, và KHÔNG ĐƯỢC bỏ sót các nét số.
+3. Phân biệt chữ số viết tay dễ nhầm lẫn:
+   - Số 1 vs Số 7 (nét gạch ngang phía trên và nét gạch giữa của số 7).
+   - Số 3 vs Số 8 (độ khép kín của hai vòng cung).
+   - Số 5 vs Số 6.
+   - Đối chiếu với số xuất hiện trong tên file "${fileName}" để xác định chữ số chính xác nhất!
+4. Cấu trúc chuẩn của số ký hiệu: "[Số]/[Ký hiệu cơ quan]" (Ví dụ: "514/QĐ-KTQLB", "749/QĐ-KTQLB", "52/2012/NĐ-CP", "125/GP-CTS", "08/2018/TT-BCA").
+
+Hãy đọc kỹ trang đầu (và trang 2 nếu có) và trích xuất chính xác:
+1. title: Tên loại văn bản và trích yếu nội dung văn bản (Ví dụ: "Quyết định ban hành Quy định quản lý và bảo trì các công trình hàng không tại Công ty TNHH Kỹ thuật Quản lý bay"). Không dùng tên viết tắt thô.
+2. document_code: Số và ký hiệu văn bản chính xác (Ví dụ: "514/QĐ-KTQLB"). Nếu không có thì để chuỗi rỗng.
 3. issuing_authority: Tên cơ quan, tổ chức ban hành văn bản (Ví dụ: "Công ty TNHH Kỹ thuật Quản lý bay", "Tổng công ty Quản lý bay Việt Nam", "Bộ Giao thông Vận tải").
-4. issue_date: Ngày tháng năm ban hành văn bản theo định dạng chuẩn YYYY-MM-DD (Ví dụ: "Hà Nội, ngày 02 tháng 7 năm 2024" -> "2024-07-02"). Nếu không tìm thấy thì để chuỗi rỗng.
+4. issue_date: Ngày tháng năm ban hành văn bản theo định dạng chuẩn YYYY-MM-DD (Ví dụ: "Hà Nội, ngày 18 tháng 7 năm 2025" -> "2025-07-18"). Chú ý đọc kỹ chữ số viết tay ngày/tháng điền vào chỗ trống.
 5. expiry_date: Ngày hết hiệu lực (nếu có ghi trong văn bản) theo định dạng YYYY-MM-DD, nếu không có để chuỗi rỗng.
 6. is_permanent: true nếu không có ngày hết hạn cụ thể, false nếu có ngày hết hạn.
 7. scope_domain: Lựa chọn 1 trong các mã chuyên môn phù hợp nhất:
@@ -168,22 +184,28 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) của tài liệu đính k
       },
     };
 
-    // Gọi Gemini REST API qua pool xoay vòng key tự động (Failover nếu gặp 429 Rate Limit)
-    const geminiData = await executeWithGeminiKeyRotation(async (key) => {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${key}`;
-      const res = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(geminiPayload),
-      });
+    // Cơ chế Định tuyến Đa tầng (Smart Model Cascade):
+    // 1. Thử mô hình Vision cao cấp "gemini-2.5-flash" để quét ảnh và nét viết tay sắc nét nhất.
+    // 2. Nếu "gemini-2.5-flash" hết quota (429 trên toàn bộ keys), tự động chuyển xuống "gemini-3.5-flash-lite".
+    // Đồng thời xoay vòng giữa TẤT CẢ các API keys có sẵn trong pool.
+    const geminiData = await executeWithModelFallback(
+      ['gemini-2.5-flash', 'gemini-3.5-flash-lite'],
+      async (model, key) => {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        const res = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(geminiPayload),
+        });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Lỗi phản hồi từ Gemini API (${res.status}): ${errText}`);
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Lỗi phản hồi từ Gemini API [${model}] (${res.status}): ${errText}`);
+        }
+
+        return await res.json();
       }
-
-      return await res.json();
-    });
+    );
 
     const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
 

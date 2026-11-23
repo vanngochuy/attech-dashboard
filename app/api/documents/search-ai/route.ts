@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     let keywords: string[] = [trimmedQuery.toLowerCase()];
     try {
       const expandRes = await generateText({
-        model: google('gemini-2.5-flash-lite'),
+        model: google('gemini-3.5-flash-lite'),
         system: `Bạn là trợ lý AI chuyên ngành Kỹ thuật Quản lý bay (ATTECH / VATM).
 Nhiệm vụ của bạn là phân tích câu tìm kiếm tự nhiên của người dùng để trích xuất các từ khóa ngữ nghĩa cốt lõi, từ đồng nghĩa, từ viết tắt và tên thiết bị kỹ thuật liên quan (ví dụ: VOR, DVOR, DME, ILS, Radar, VHF, CHT, CNS, tiêu chuẩn, bảo dưỡng, khai thác, an toàn, PCCC...).
 Chỉ trả về JSON thuần túy (không dùng markdown, không giải thích) dạng: {"keywords": ["từ1", "từ2", "từ3"]}.`,
@@ -150,7 +150,7 @@ Chỉ trả về JSON thuần túy (không dùng markdown, không giải thích)
     // Bước 4: Gemini chấm điểm độ liên quan và tạo đoạn trích dẫn (Snippet) chính xác
     try {
       const evaluateRes = await generateText({
-        model: google('gemini-2.5-flash-lite'),
+        model: google('gemini-3.5-flash-lite'),
         system: `Bạn là trợ lý AI tìm kiếm chuyên sâu tài liệu kỹ thuật ngành Quản lý bay (ATTECH).
 Người dùng đang tìm kiếm với câu hỏi/yêu cầu: "${trimmedQuery}".
 Dưới đây là danh sách các tài liệu ứng viên kèm một đoạn trích từ nội dung văn bản.

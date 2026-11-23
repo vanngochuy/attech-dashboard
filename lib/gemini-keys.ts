@@ -3,16 +3,17 @@ import { cleanEnv } from './supabase';
 /**
  * Trình quản lý Gemini API Key đa nhiệm (Key Rotation & Failover Pool)
  * 
- * Hỗ trợ các định dạng trong file .env.local:
- * 1. Nhiều key trong cùng 1 biến cách nhau bằng dấu phẩy:
- *    GEMINI_API_KEY="AIzaSyKey1..., AIzaSyKey2..., AIzaSyKey3..."
+ * Hỗ trợ linh hoạt không giới hạn số lượng key trong file .env.local:
+ * 1. Nhiều key trong cùng 1 biến (phân tách bằng dấu phẩy, chấm phẩy hoặc xuống dòng):
+ *    GEMINI_API_KEY="AIzaSy1..., AIzaSy2..., AIzaSy3..."
  * 
- * 2. Đặt tên nhiều biến độc lập:
- *    GEMINI_API_KEY_1="AIzaSyKey1..."
- *    GEMINI_API_KEY_2="AIzaSyKey2..."
- *    GEMINI_API_KEY_3="AIzaSyKey3..."
+ * 2. Đặt tên nhiều biến độc lập tăng dần:
+ *    GEMINI_API_KEY_1="AIzaSy1..."
+ *    GEMINI_API_KEY_2="AIzaSy2..."
+ *    GEMINI_API_KEY_3="AIzaSy3..."
+ *    ... (GEMINI_API_KEY_N bất kỳ không giới hạn)
  * 
- * 3. Hoặc biến GEMINI_API_KEYS="key1, key2"
+ * 3. Tự động phát hiện mọi biến môi trường có tiền tố GEMINI_API_KEY*
  */
 
 let currentKeyIndex = 0;
@@ -20,27 +21,42 @@ let currentKeyIndex = 0;
 export function getAllGeminiApiKeys(): string[] {
   const keysSet = new Set<string>();
 
-  const rawKeys = [
-    process.env.GEMINI_API_KEY,
-    process.env.GEMINI_API_KEYS,
-    process.env.NEXT_PUBLIC_GEMINI_API_KEY,
-  ];
+  const rawKeys: string[] = [];
 
-  for (let i = 1; i <= 10; i++) {
-    const k = process.env[`GEMINI_API_KEY_${i}`];
-    if (k) rawKeys.push(k);
+  // 1. Quét tự động toàn bộ Object.keys(process.env) khớp mẫu GEMINI_API_KEY*
+  try {
+    for (const envKey of Object.keys(process.env)) {
+      if (/^(NEXT_PUBLIC_)?GEMINI_API_KEY(_\d+)?$/i.test(envKey) || /^(NEXT_PUBLIC_)?GEMINI_API_KEYS$/i.test(envKey)) {
+        const val = process.env[envKey];
+        if (val) rawKeys.push(val);
+      }
+    }
+  } catch (e) {
+    // Fallback nếu Object.keys(process.env) bị hạn chế trong môi trường runtime
   }
 
+  // 2. Quét dự phòng trực tiếp từ 1 đến 50
+  for (let i = 1; i <= 50; i++) {
+    const val = process.env[`GEMINI_API_KEY_${i}`];
+    if (val) rawKeys.push(val);
+  }
+
+  // 3. Các biến mặc định tiêu chuẩn
+  if (process.env.GEMINI_API_KEY) rawKeys.push(process.env.GEMINI_API_KEY);
+  if (process.env.GEMINI_API_KEYS) rawKeys.push(process.env.GEMINI_API_KEYS);
+  if (process.env.NEXT_PUBLIC_GEMINI_API_KEY) rawKeys.push(process.env.NEXT_PUBLIC_GEMINI_API_KEY);
+
+  // Phân tách dấu phẩy, chấm phẩy, xuống dòng và chuẩn hóa
   for (const raw of rawKeys) {
     if (!raw) continue;
-    const parts = raw.split(/[,;\n\r]+/);
+    const parts = raw.split(/[,;\n\r\s]+/);
     for (const part of parts) {
       const clean = cleanEnv(part);
       if (
         clean &&
         clean !== 'YOUR_GEMINI_API_KEY' &&
         clean !== 'YOUR_API_KEY' &&
-        clean.length > 10
+        clean.length > 15
       ) {
         keysSet.add(clean);
       }
@@ -69,6 +85,21 @@ export function getPrimaryGeminiApiKey(): string {
 }
 
 /**
+ * Kiểm tra xem lỗi trả về từ API có phải là lỗi giới hạn hạn mức (Rate limit / Quota) hay không
+ */
+export function isRateLimitError(err: any): boolean {
+  const errMsg = (err?.message || String(err)).toLowerCase();
+  return (
+    errMsg.includes('429') ||
+    errMsg.includes('quota') ||
+    errMsg.includes('resource_exhausted') ||
+    errMsg.includes('rate limit') ||
+    errMsg.includes('rate_limit') ||
+    errMsg.includes('too many requests')
+  );
+}
+
+/**
  * Tự động thực thi lệnh gọi Gemini AI và tự động đổi key khác (Failover)
  * nếu gặp lỗi 429 (ResourceExhausted / Rate limit / Hết quota)
  */
@@ -80,7 +111,6 @@ export async function executeWithGeminiKeyRotation<T>(
     throw new Error('Chưa cấu hình GEMINI_API_KEY hợp lệ trong file .env.local.');
   }
 
-  // Bắt đầu từ vị trí xoay vòng tiếp theo
   let startIndex = currentKeyIndex % keys.length;
   let lastError: any = null;
 
@@ -90,26 +120,53 @@ export async function executeWithGeminiKeyRotation<T>(
 
     try {
       const result = await apiCall(apiKey);
-      currentKeyIndex = (keyIndex + 1) % keys.length; // Lưu vị trí thành công tiếp theo
+      currentKeyIndex = (keyIndex + 1) % keys.length;
       return result;
     } catch (err: any) {
       lastError = err;
-      const errMsg = (err?.message || String(err)).toLowerCase();
-      const isRateLimited =
-        errMsg.includes('429') ||
-        errMsg.includes('quota') ||
-        errMsg.includes('resource_exhausted') ||
-        errMsg.includes('rate limit');
-
-      if (isRateLimited && keys.length > 1) {
-        console.warn(`[Gemini Rotation] Key #${keyIndex + 1} chạm giới hạn quota (429). Tự động chuyển sang key #${((keyIndex + 1) % keys.length) + 1}...`);
+      if (isRateLimitError(err) && keys.length > 1) {
+        console.warn(
+          `[Gemini Rotation] Key #${keyIndex + 1}/${keys.length} chạm giới hạn quota (429). Tự động chuyển sang key #${((keyIndex + 1) % keys.length) + 1}...`
+        );
         continue;
       }
-
       throw err;
     }
   }
 
   throw lastError || new Error('Tất cả các Gemini API key đều đã chạm giới hạn quota.');
+}
+
+/**
+ * Thực thi thông minh đa tầng mô hình (Model Cascade / Fallback):
+ * Thử mô hình ưu tiên cao trước (ví dụ gemini-2.5-flash cho độ chính xác thị giác cao).
+ * Nếu toàn bộ key đều chạm giới hạn (429), tự động hạ tầng xuống mô hình dự phòng (ví dụ gemini-3.5-flash-lite)
+ * để đảm bảo hệ thống không bao giờ bị dừng hoạt động.
+ */
+export async function executeWithModelFallback<T>(
+  models: string[],
+  apiCall: (model: string, apiKey: string) => Promise<T>
+): Promise<T> {
+  let lastError: any = null;
+
+  for (let m = 0; m < models.length; m++) {
+    const model = models[m];
+    try {
+      return await executeWithGeminiKeyRotation(async (apiKey) => {
+        return await apiCall(model, apiKey);
+      });
+    } catch (err: any) {
+      lastError = err;
+      if (isRateLimitError(err) && m < models.length - 1) {
+        console.warn(
+          `[Gemini Model Fallback] Mô hình "${model}" đã hết quota trên toàn bộ key. Tự động chuyển tầng dự phòng sang "${models[m + 1]}"...`
+        );
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError;
 }
 

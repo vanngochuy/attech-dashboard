@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { PDFDocument } from 'pdf-lib';
 import zlib from 'zlib';
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase';
-import { executeWithGeminiKeyRotation, getAllGeminiApiKeys } from '@/lib/gemini-keys';
+import { executeWithModelFallback, getAllGeminiApiKeys } from '@/lib/gemini-keys';
 
 export const maxDuration = 60;
 
@@ -170,11 +170,26 @@ export async function POST(request: Request) {
 
     // 3. Prompt chuyên sâu trích xuất metadata văn bản hành chính & tài liệu kỹ thuật hàng không
     const prompt = `Bạn là chuyên gia thẩm định và phân loại văn bản hành chính / tài liệu kỹ thuật hàng không của Công ty TNHH Kỹ thuật Quản lý bay (ATTECH).
+
+THÔNG TIN FILE GỐC (File-Name Grounding):
+- Tên tập tin hiện tại: "${doc.file_name}"
+(LƯU Ý QUAN TRỌNG: Tên file thường phản ánh chính xác số hiệu hoặc tên viết tắt của văn bản, hãy đối chiếu chéo tên file này với nội dung hình ảnh để trích xuất số hiệu chuẩn xác nhất!)
+
+HƯỚNG DẪN QUAN TRỌNG VỀ NHẬN DIỆN CHỮ VIẾT TAY & SỐ HIỆU VĂN BẢN (document_code):
+1. Vị trí số hiệu: Nằm ở góc trên bên trái văn bản, ngay dưới tên cơ quan ban hành (Ví dụ: "Số: ...../QĐ-KTQLB" hoặc "Số: .../2024/NĐ-CP").
+2. Xử lý nét viết tay đè lên dòng chấm lửng (......): Trong thực tế, các văn bản hành chính in sẵn dòng chấm lửng, sau đó văn thư dùng bút viết tay số (ví dụ: viết tay "514", "125", "749" đè lên các dấu chấm). BẠN PHẢI nhìn kỹ các nét bút viết tay, KHÔNG ĐƯỢC nhầm dấu chấm với dấu gạch ngang, và KHÔNG ĐƯỢC bỏ sót các nét số.
+3. Phân biệt chữ số viết tay dễ nhầm lẫn:
+   - Số 1 vs Số 7 (nét gạch ngang phía trên và nét gạch giữa của số 7).
+   - Số 3 vs Số 8 (độ khép kín của hai vòng cung).
+   - Số 5 vs Số 6.
+   - Đối chiếu với số xuất hiện trong tên file "${doc.file_name}" để xác định chữ số chính xác nhất!
+4. Cấu trúc chuẩn của số ký hiệu: "[Số]/[Ký hiệu cơ quan]" (Ví dụ: "514/QĐ-KTQLB", "749/QĐ-KTQLB", "52/2012/NĐ-CP", "125/GP-CTS", "08/2018/TT-BCA").
+
 Hãy đọc kỹ nội dung tài liệu đính kèm (ưu tiên 2 trang đầu) và trích xuất chính xác các thông tin metadata sau:
-1. title: Tên loại văn bản và trích yếu đầy đủ, chuẩn ngữ nghĩa tiếng Việt (Ví dụ: "Nghị định quy định xử phạt vi phạm hành chính trong lĩnh vực phòng cháy và chữa cháy", "Hướng dẫn nhập số liệu trên phần mềm SIRMS", "Quy định phát NOTAM trong tổ chức cung cấp dịch vụ CNS", "Hướng dẫn khai thác bảo dưỡng máy tạo tín hiệu cao tần 8648B"). Tuyệt đối KHÔNG giữ các tên file thô tắt như "52ND - PCCC-CHCN".
-2. document_code: Số và ký hiệu văn bản chính thức (Ví dụ: "52/2012/NĐ-CP", "749/QĐ-KTQLB", "125/GP-CTS", "08/2018/TT-BCA"). Nếu là tài liệu kỹ thuật/quy trình/hướng dẫn không có số hiệu chính thức, trích xuất mã ấn bản hoặc tên mã rút gọn (Ví dụ: "HD-SIRMS", "HD-8648B", "QĐ-NOTAM").
-3. issuing_authority: Tên cơ quan, tổ chức ban hành (Ví dụ: "Chính phủ", "Bộ Giao thông Vận tải", "Bộ Công an", "Công ty TNHH Kỹ thuật Quản lý bay", "Tổng công ty Quản lý bay Việt Nam", "Cục Hàng không Việt Nam", "ICAO").
-4. issue_date: Ngày tháng năm ban hành văn bản theo định dạng chuẩn YYYY-MM-DD (Ví dụ: "2012-06-14"). Nếu không có ngày cụ thể, tìm năm ban hành hoặc phiên bản (ví dụ "2023-01-01"). Nếu hoàn toàn không có để "".
+1. title: Tên loại văn bản và trích yếu đầy đủ, chuẩn ngữ nghĩa tiếng Việt (Ví dụ: "Quyết định ban hành Quy định quản lý và bảo trì các công trình hàng không tại Công ty TNHH Kỹ thuật Quản lý bay", "Hướng dẫn nhập số liệu trên phần mềm SIRMS"). Tuyệt đối KHÔNG giữ các tên file thô tắt như "52ND - PCCC-CHCN".
+2. document_code: Số và ký hiệu văn bản chính thức (Ví dụ: "514/QĐ-KTQLB", "52/2012/NĐ-CP", "749/QĐ-KTQLB", "125/GP-CTS"). Nếu là tài liệu kỹ thuật/quy trình/hướng dẫn không có số hiệu chính thức, trích xuất mã ấn bản hoặc tên mã rút gọn (Ví dụ: "HD-SIRMS", "HD-8648B", "QĐ-NOTAM").
+3. issuing_authority: Tên cơ quan, tổ chức ban hành (Ví dụ: "Công ty TNHH Kỹ thuật Quản lý bay", "Tổng công ty Quản lý bay Việt Nam", "Bộ Giao thông Vận tải", "Cục Hàng không Việt Nam").
+4. issue_date: Ngày tháng năm ban hành văn bản theo định dạng chuẩn YYYY-MM-DD (Ví dụ: "2025-07-18"). Chú ý đọc kỹ chữ số viết tay ngày/tháng điền vào chỗ trống.
 5. department_access: Phân loại vào 1 trong các lĩnh vực:
    - "VB_PHAP_LUAT" (Văn bản Pháp luật, Luật, Nghị định, Thông tư, Quyết định quy chế)
    - "QL_KY_THUAT" (Quản lý Kỹ thuật CNS: Radar, VHF, Selex, ILS, DVOR/DME, SIRMS, thiết bị)
@@ -276,22 +291,25 @@ Hãy đọc kỹ nội dung tài liệu đính kèm (ưu tiên 2 trang đầu) v
       },
     };
 
-    // Gọi Gemini REST API qua pool xoay vòng key tự động
-    const geminiData = await executeWithGeminiKeyRotation(async (key) => {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${key}`;
-      const res = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(geminiPayload),
-      });
+    // Gọi Gemini REST API qua pool xoay vòng key tự động và phân tầng mô hình (Thử 2.5-flash trước, nếu hết quota fallback sang 3.5-flash-lite)
+    const geminiData = await executeWithModelFallback(
+      ['gemini-2.5-flash', 'gemini-3.5-flash-lite'],
+      async (model, key) => {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        const res = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(geminiPayload),
+        });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Lỗi từ Gemini AI (${res.status}): ${errText}`);
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Lỗi từ Gemini AI [${model}] (${res.status}): ${errText}`);
+        }
+
+        return await res.json();
       }
-
-      return await res.json();
-    });
+    );
 
     const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) {
