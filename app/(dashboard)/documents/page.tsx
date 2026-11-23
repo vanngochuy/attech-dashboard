@@ -1391,20 +1391,6 @@ function DocumentsContent() {
               </span>
             </h3>
 
-            {/* Nút Xuất Excel trên thanh công cụ Danh sách cho Admin */}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setIsExportModalOpen(true)}
-                disabled={isLoading || documents.length === 0}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition-all shadow-2xs cursor-pointer ml-1"
-                title="Admin: Mở hộp thoại xuất báo cáo danh mục ra file Excel"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Xuất Excel</span>
-              </button>
-            )}
-
             {(activeFilter !== 'ALL' ||
               issuerFilter !== 'ALL' ||
               yearFilter !== 'ALL' ||
