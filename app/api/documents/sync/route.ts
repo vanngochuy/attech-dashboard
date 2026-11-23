@@ -4,15 +4,15 @@ import { cleanEnv } from '@/lib/supabase';
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  try {
-    const rawWebhook = cleanEnv(process.env.N8N_WEBHOOK_URL);
-    const derivedSyncUrl = rawWebhook
-      ? rawWebhook.replace('/document-upload', '/sync-drive-health')
-      : 'https://docs-n8n.bbm.io.vn/webhook/sync-drive-health';
-    const prodWebhookUrl = cleanEnv(process.env.N8N_SYNC_WEBHOOK_URL) || derivedSyncUrl;
-    const testWebhookUrl = prodWebhookUrl.replace('/webhook/', '/webhook-test/');
-    const fallbackWebhookUrl = prodWebhookUrl.replace('/sync-drive-health', '/drive-sync-audit');
+  const rawWebhook = cleanEnv(process.env.N8N_WEBHOOK_URL);
+  const derivedSyncUrl = rawWebhook
+    ? rawWebhook.replace('/document-upload', '/sync-drive-health')
+    : 'https://docs-n8n.bbm.io.vn/webhook/sync-drive-health';
+  const prodWebhookUrl = cleanEnv(process.env.N8N_SYNC_WEBHOOK_URL) || derivedSyncUrl;
+  const testWebhookUrl = prodWebhookUrl.replace('/webhook/', '/webhook-test/');
+  const fallbackWebhookUrl = prodWebhookUrl.replace('/sync-drive-health', '/drive-sync-audit');
 
+  try {
     // 1. Thử gửi tới Production Webhook
     let n8nRes = await fetch(prodWebhookUrl, {
       method: 'POST',
