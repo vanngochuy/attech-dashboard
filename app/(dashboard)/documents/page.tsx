@@ -95,6 +95,29 @@ function toYMD(val?: string | null): string {
   }
 }
 
+// Định dạng ngày sang dd/mm/yyyy chuẩn cho báo cáo Excel
+function formatToDDMMYYYY(val?: string | null): string {
+  if (!val) return '---';
+  const str = String(val).trim();
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymdMatch) {
+    const yyyy = ymdMatch[1];
+    const mm = ymdMatch[2].padStart(2, '0');
+    const dd = ymdMatch[3].padStart(2, '0');
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  try {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${dd}/${mm}/${yyyy}`;
+    }
+  } catch {}
+  return str || '---';
+}
+
 type InlineField = 'file_name' | 'document_code' | 'issuing_authority' | 'issue_date' | 'department_access';
 
 function InlineEditable({
@@ -236,13 +259,11 @@ function DocumentsContent() {
           'Số / Ký hiệu': doc.document_code || '---',
           'Tên văn bản / Trích yếu': doc.file_name || '---',
           'Cơ quan ban hành': doc.issuing_authority || '---',
-          'Ngày ban hành': doc.issue_date || '---',
+          'Ngày ban hành': formatToDDMMYYYY(doc.issue_date),
           'Chuyên môn / Lĩnh vực': deptName,
           'Trạng thái hiệu lực': isSup ? 'ĐÃ THAY THẾ' : 'CÒN HIỆU LỰC',
           'Đường dẫn xem trên Google Drive': driveUrl,
-          'Ngày nạp hệ thống': doc.created_at
-            ? new Date(doc.created_at).toLocaleDateString('vi-VN')
-            : '---',
+          'Ngày nạp hệ thống': formatToDDMMYYYY(doc.created_at),
         };
       });
 
