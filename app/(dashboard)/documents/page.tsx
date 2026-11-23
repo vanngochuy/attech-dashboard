@@ -680,10 +680,18 @@ function DocumentsContent() {
       const res = await fetch('/api/documents/sync', {
         method: 'POST',
       });
-      const data = await res.json();
+
+      let data: any = null;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json().catch(() => null);
+      } else {
+        const text = await res.text().catch(() => '');
+        data = { error: text?.slice(0, 150) || `Máy chủ phản hồi trạng thái ${res.status}` };
+      }
 
       if (!res.ok) {
-        throw new Error(data.error || 'Quét thất bại');
+        throw new Error(data?.error || `Quét thất bại (Mã lỗi ${res.status})`);
       }
 
       setScanNotification({

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { cleanEnv } from '@/lib/supabase';
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     const rawWebhook = cleanEnv(process.env.N8N_WEBHOOK_URL);
