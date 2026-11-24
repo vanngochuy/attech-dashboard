@@ -85,9 +85,9 @@ export function getPrimaryGeminiApiKey(): string {
 }
 
 /**
- * Kiểm tra xem lỗi trả về từ API có phải là lỗi giới hạn hạn mức (Rate limit / Quota) hay không
+ * Kiểm tra xem lỗi trả về từ API có phải là lỗi tạm thời hoặc hết hạn mức hay không
  */
-export function isRateLimitError(err: any): boolean {
+export function isTransientApiError(err: any): boolean {
   const errMsg = (err?.message || String(err)).toLowerCase();
   return (
     errMsg.includes('429') ||
@@ -95,9 +95,15 @@ export function isRateLimitError(err: any): boolean {
     errMsg.includes('resource_exhausted') ||
     errMsg.includes('rate limit') ||
     errMsg.includes('rate_limit') ||
-    errMsg.includes('too many requests')
+    errMsg.includes('too many requests') ||
+    errMsg.includes('503') ||
+    errMsg.includes('unavailable') ||
+    errMsg.includes('overloaded') ||
+    errMsg.includes('high demand')
   );
 }
+
+export const isRateLimitError = isTransientApiError;
 
 /**
  * Tự động thực thi lệnh gọi Gemini AI và tự động đổi key khác (Failover)

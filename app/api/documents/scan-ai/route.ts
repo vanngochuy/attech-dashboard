@@ -264,7 +264,7 @@ Hãy đọc kỹ nội dung tài liệu đính kèm (ưu tiên 2 trang đầu) v
       contents: [{ role: 'user', parts: geminiParts }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 500,
+        maxOutputTokens: 2048,
         responseMimeType: 'application/json',
         responseSchema: {
           type: 'OBJECT',
@@ -316,7 +316,25 @@ Hãy đọc kỹ nội dung tài liệu đính kèm (ưu tiên 2 trang đầu) v
       return NextResponse.json({ error: 'AI không trả về kết quả phân tích.' }, { status: 500 });
     }
 
-    const parsed = JSON.parse(rawText);
+    let parsed: any = {};
+    try {
+      const cleanJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      parsed = JSON.parse(cleanJson);
+    } catch (parseErr) {
+      console.warn('[Scan AI] Lỗi parse JSON tiêu chuẩn, sử dụng regex cứu nguy:', parseErr);
+      const titleMatch = rawText.match(/"title"\s*:\s*"([^"]*)/);
+      const codeMatch = rawText.match(/"document_code"\s*:\s*"([^"]*)/);
+      const authMatch = rawText.match(/"issuing_authority"\s*:\s*"([^"]*)/);
+      const dateMatch = rawText.match(/"issue_date"\s*:\s*"([^"]*)/);
+      const deptMatch = rawText.match(/"department_access"\s*:\s*"([^"]*)/);
+      parsed = {
+        title: titleMatch ? titleMatch[1] : '',
+        document_code: codeMatch ? codeMatch[1] : '',
+        issuing_authority: authMatch ? authMatch[1] : '',
+        issue_date: dateMatch ? dateMatch[1] : '',
+        department_access: deptMatch ? deptMatch[1] : 'QL_KY_THUAT',
+      };
+    }
 
     // 5. Xây dựng payload cập nhật Supabase
     const updatePayload: Record<string, any> = {

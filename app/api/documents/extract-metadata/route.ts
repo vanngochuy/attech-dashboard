@@ -144,7 +144,7 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) và trích xuất chính x
       ],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 400,
+        maxOutputTokens: 2048,
         responseMimeType: 'application/json',
         responseSchema: {
           type: 'OBJECT',
@@ -213,7 +213,26 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) và trích xuất chính x
       return NextResponse.json({ error: 'Không nhận được dữ liệu trích xuất từ AI' }, { status: 500 });
     }
 
-    const parsed = JSON.parse(rawText);
+    let parsed: any = {};
+    try {
+      const cleanJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      parsed = JSON.parse(cleanJson);
+    } catch (parseErr) {
+      console.warn('[AI Metadata Extractor] Lỗi parse JSON tiêu chuẩn, sử dụng regex cứu nguy:', parseErr);
+      const titleMatch = rawText.match(/"title"\s*:\s*"([^"]*)/);
+      const codeMatch = rawText.match(/"document_code"\s*:\s*"([^"]*)/);
+      const authMatch = rawText.match(/"issuing_authority"\s*:\s*"([^"]*)/);
+      const dateMatch = rawText.match(/"issue_date"\s*:\s*"([^"]*)/);
+      const expMatch = rawText.match(/"expiry_date"\s*:\s*"([^"]*)/);
+      parsed = {
+        title: titleMatch ? titleMatch[1] : '',
+        document_code: codeMatch ? codeMatch[1] : '',
+        issuing_authority: authMatch ? authMatch[1] : '',
+        issue_date: dateMatch ? dateMatch[1] : '',
+        expiry_date: expMatch ? expMatch[1] : '',
+        is_permanent: true,
+      };
+    }
 
     return NextResponse.json({
       success: true,
