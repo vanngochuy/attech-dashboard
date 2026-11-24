@@ -169,15 +169,15 @@ BẮT BUỘC trả về JSON thuần túy (không kèm markdown \`\`\`json hay t
 ]`,
         prompt: `Danh sách tài liệu ứng viên:
 ${JSON.stringify(
-  topCandidates.map((c, i) => ({
-    id: c.id,
-    title: c.file_name,
-    code: c.document_code,
-    content_sample: c.sampleText,
-  })),
-  null,
-  2
-)}`,
+          topCandidates.map((c, i) => ({
+            id: c.id,
+            title: c.file_name,
+            code: c.document_code,
+            content_sample: c.sampleText,
+          })),
+          null,
+          2
+        )}`,
       });
 
       const parsedResults = JSON.parse(evaluateRes.text.replace(/```json|```/g, '').trim());

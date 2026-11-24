@@ -291,9 +291,9 @@ Hãy đọc kỹ nội dung tài liệu đính kèm (ưu tiên 2 trang đầu) v
       },
     };
 
-    // Gọi Gemini REST API qua pool xoay vòng key tự động và phân tầng mô hình (Thử 2.5-flash trước, nếu hết quota fallback sang 3.5-flash-lite)
+    // Gọi Gemini REST API qua pool xoay vòng key tự động và phân tầng mô hình (Thử 3.8-flash trước, nếu hết quota fallback sang 3.5-flash-lite)
     const geminiData = await executeWithModelFallback(
-      ['gemini-2.5-flash', 'gemini-3.5-flash-lite'],
+      ['gemini-3.8-flash', 'gemini-3.5-flash-lite'],
       async (model, key) => {
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
         const res = await fetch(geminiUrl, {

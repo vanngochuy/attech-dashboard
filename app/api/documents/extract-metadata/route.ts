@@ -185,11 +185,11 @@ Hãy đọc kỹ trang đầu (và trang 2 nếu có) và trích xuất chính x
     };
 
     // Cơ chế Định tuyến Đa tầng (Smart Model Cascade):
-    // 1. Thử mô hình Vision cao cấp "gemini-2.5-flash" để quét ảnh và nét viết tay sắc nét nhất.
-    // 2. Nếu "gemini-2.5-flash" hết quota (429 trên toàn bộ keys), tự động chuyển xuống "gemini-3.5-flash-lite".
+    // 1. Thử mô hình Vision cao cấp nhất "gemini-3.8-flash" để quét ảnh và nét viết tay sắc nét nhất.
+    // 2. Nếu "gemini-3.8-flash" hết quota (429 trên toàn bộ keys) hoặc gặp sự cố, tự động chuyển xuống "gemini-3.5-flash-lite".
     // Đồng thời xoay vòng giữa TẤT CẢ các API keys có sẵn trong pool.
     const geminiData = await executeWithModelFallback(
-      ['gemini-2.5-flash', 'gemini-3.5-flash-lite'],
+      ['gemini-3.8-flash', 'gemini-3.5-flash-lite'],
       async (model, key) => {
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
         const res = await fetch(geminiUrl, {

@@ -139,9 +139,10 @@ export async function executeWithGeminiKeyRotation<T>(
 
 /**
  * Thực thi thông minh đa tầng mô hình (Model Cascade / Fallback):
- * Thử mô hình ưu tiên cao trước (ví dụ gemini-2.5-flash cho độ chính xác thị giác cao).
- * Nếu toàn bộ key đều chạm giới hạn (429), tự động hạ tầng xuống mô hình dự phòng (ví dụ gemini-3.5-flash-lite)
- * để đảm bảo hệ thống không bao giờ bị dừng hoạt động.
+ * Thử mô hình ưu tiên cao trước (ví dụ gemini-3.8-flash cho độ chính xác thị giác cao).
+ * Nếu xảy ra lỗi (hết quota 429, mô hình không khả dụng 404, quá tải 503...),
+ * tự động hạ tầng xuống mô hình dự phòng kế tiếp (ví dụ gemini-3.5-flash-lite)
+ * để đảm bảo hệ thống không bao giờ bị dừng hoạt động hoặc báo lỗi cho người dùng.
  */
 export async function executeWithModelFallback<T>(
   models: string[],
@@ -157,9 +158,9 @@ export async function executeWithModelFallback<T>(
       });
     } catch (err: any) {
       lastError = err;
-      if (isRateLimitError(err) && m < models.length - 1) {
+      if (m < models.length - 1) {
         console.warn(
-          `[Gemini Model Fallback] Mô hình "${model}" đã hết quota trên toàn bộ key. Tự động chuyển tầng dự phòng sang "${models[m + 1]}"...`
+          `[Gemini Model Fallback] Mô hình "${model}" gặp sự cố (${err?.message || err}). Tự động chuyển tầng dự phòng sang "${models[m + 1]}"...`
         );
         continue;
       }
